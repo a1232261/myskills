@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>騰哥桌寵狗萬能藍牙遙控與音效中心</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        sans: ['Noto Sans TC', 'sans-serif'],
+                    },
+                    colors: {
+                        cyber: {
+                            dark: '#0b0f19',
+                            card: '#161e2e',
+                            border: '#2a364f',
+                            cyan: '#06b6d4',
+                            purple: '#8b5cf6',
+                            pink: '#ec4899',
+                            yellow: '#f59e0b',
+                            green: '#10b981'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+        }
+        .glow-purple {
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+        }
+        .active-tab {
+            border-bottom: 3px solid #06b6d4;
+            color: #06b6d4;
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a364f;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-cyber-dark text-slate-100 font-sans min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+    <!-- Top Bar -->
+    <header class="bg-cyber-card border-b border-cyber-border px-4 py-3 sticky top-0 z-50 shadow-xl">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center glow-cyan shadow-lg">
+                    <i class="fa-solid font-bold fa-dog text-xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-orbitron font-bold text-lg leading-none tracking-wider bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">ROBOT DOG</h1>
+                    <span class="text-[10px] text-slate-400">1000+ 動作組合 & 音檔 (0~500) 控制</span>
+                </div>
+            </div>
+
+            <!-- Connect Button -->
+            <button id="connectBtn" onclick="toggleBluetooth()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium text-sm flex items-center space-x-2 transition-all duration-200 active:scale-95 shadow-md">
+                <i id="btIcon" class="fa-solid fa-bluetooth text-base"></i>
+                <span id="btStatusText">連接藍芽</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-16 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- iOS Helper Tip -->
+    <div id="iosTip" class="bg-indigo-950/80 border-b border-indigo-800/50 px-4 py-2 text-xs text-indigo-200 text-center flex items-center justify-center space-x-2">
+        <i class="fa-solid fa-circle-info text-cyan-400"></i>
+        <span><strong>跨平台提示：</strong> iOS 請使用 <u>Bluefy</u> 瀏覽器，Android 請使用 <u>Chrome</u> 開啟。</span>
+        <button onclick="document.getElementById('iosTip').remove()" class="text-slate-400 hover:text-white ml-2"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-cyber-card/90 backdrop-blur-md border-b border-cyber-border px-2 sticky top-[65px] z-40">
+        <div class="max-w-4xl mx-auto flex justify-around text-xs md:text-sm font-medium">
+            <button onclick="switchTab('remote')" id="tab-remote" class="py-3 px-3 active-tab transition-colors flex items-center space-x-1.5 font-bold">
+                <i class="fa-solid fa-gamepad"></i><span>即時遙控</span>
+            </button>
+            <button onclick="switchTab('combo')" id="tab-combo" class="py-3 px-3 text-slate-400 hover:text-cyan-400 transition-colors flex items-center space-x-1.5">
+                <i class="fa-solid fa-masks-theater"></i><span>1000+ 組合</span>
+            </button>
+            <button onclick="switchTab('audio')" id="tab-audio" class="py-3 px-3 text-slate-400 hover:text-cyan-400 transition-colors flex items-center space-x-1.5">
+                <i class="fa-solid fa-music"></i><span>音檔播放</span>
+            </button>
+            <button onclick="switchTab('sequence')" id="tab-sequence" class="py-3 px-3 text-slate-400 hover:text-cyan-400 transition-colors flex items-center space-x-1.5">
+                <i class="fa-solid fa-list-check"></i><span>劇本編排</span>
+            </button>
+            <button onclick="switchTab('terminal')" id="tab-terminal" class="py-3 px-3 text-slate-400 hover:text-cyan-400 transition-colors flex items-center space-x-1.5">
+                <i class="fa-solid fa-terminal"></i><span>終端日誌</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="max-w-4xl mx-auto w-full p-4 flex-grow space-y-4">
+
+        <!-- TAB 1: REMOTE CONTROL -->
+        <section id="panel-remote" class="space-y-4">
+            <!-- Face Quick Pill bar -->
+            <div class="bg-cyber-card p-3 rounded-2xl border border-cyber-border shadow-md">
+                <div class="text-xs text-slate-400 mb-2 flex justify-between items-center">
+                    <span><i class="fa-regular fa-face-smile text-cyan-400 mr-1"></i> 快速 OLED 表情切換</span>
+                    <span class="text-[10px] text-slate-500">點擊即時發送</span>
+                </div>
+                <div class="flex space-x-2 overflow-x-auto pb-1 scrollbar-none">
+                    <button onclick="sendCmd('@Face_happy#$')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 text-xs whitespace-nowrap transition active:scale-95">😊 開心</button>
+                    <button onclick="sendCmd('@Face_hello#$')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 text-xs whitespace-nowrap transition active:scale-95">😜 招呼</button>
+                    <button onclick="sendCmd('@Face_mania#$')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 text-xs whitespace-nowrap transition active:scale-95">😠 狂暴</button>
+                    <button onclick="sendCmd('@Face_sleep#$')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 text-xs whitespace-nowrap transition active:scale-95">😴 睡覺</button>
+                    <button onclick="sendCmd('@Face_emo#$')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 text-xs whitespace-nowrap transition active:scale-95">😭 EMO</button>
+                    <button onclick="sendCmd('@Face_stare#$')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 text-xs whitespace-nowrap transition active:scale-95">😏 凝視</button>
+                </div>
+            </div>
+
+            <!-- Direction Pad & Core Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- D-Pad Controls -->
+                <div class="bg-cyber-card p-5 rounded-2xl border border-cyber-border shadow-md flex flex-col items-center justify-center min-h-[260px]">
+                    <span class="text-xs text-slate-400 mb-4 font-orbitron tracking-widest"><i class="fa-solid fa-arrows-up-down-left-right text-cyan-400 mr-1"></i> MOVEMENT D-PAD</span>
+                    <div class="relative w-48 h-48">
+                        <button onclick="sendActionCmd('@QIANJIN#$')" class="absolute top-0 left-16 w-16 h-16 bg-slate-800 border border-slate-700 hover:border-cyan-400 active:bg-cyan-600 rounded-xl flex items-center justify-center text-xl text-cyan-400 active:text-white shadow-lg transition"><i class="fa-solid fa-chevron-up"></i></button>
+                        <button onclick="sendActionCmd('@HOUTUI#$')" class="absolute bottom-0 left-16 w-16 h-16 bg-slate-800 border border-slate-700 hover:border-cyan-400 active:bg-cyan-600 rounded-xl flex items-center justify-center text-xl text-cyan-400 active:text-white shadow-lg transition"><i class="fa-solid fa-chevron-down"></i></button>
+                        <button onclick="sendActionCmd('@ZUOZHUAN#$')" class="absolute top-16 left-0 w-16 h-16 bg-slate-800 border border-slate-700 hover:border-cyan-400 active:bg-cyan-600 rounded-xl flex items-center justify-center text-xl text-cyan-400 active:text-white shadow-lg transition"><i class="fa-solid fa-chevron-left"></i></button>
+                        <button onclick="sendActionCmd('@YOUZHUAN#$')" class="absolute top-16 right-0 w-16 h-16 bg-slate-800 border border-slate-700 hover:border-cyan-400 active:bg-cyan-600 rounded-xl flex items-center justify-center text-xl text-cyan-400 active:text-white shadow-lg transition"><i class="fa-solid fa-chevron-right"></i></button>
+                        <button onclick="sendActionCmd('@LIZHENG#$')" class="absolute top-16 left-16 w-16 h-16 bg-gradient-to-tr from-purple-600 to-pink-600 rounded-xl flex flex-col items-center justify-center text-xs font-bold text-white shadow-md active:scale-90 transition">
+                            <i class="fa-solid fa-hand text-sm mb-0.5"></i><span>立正</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Stance Buttons Grid -->
+                <div class="bg-cyber-card p-5 rounded-2xl border border-cyber-border shadow-md space-y-3">
+                    <span class="text-xs text-slate-400 font-orbitron tracking-widest block mb-2"><i class="fa-solid fa-bolt text-yellow-400 mr-1"></i> QUICK ACTIONS</span>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button onclick="sendActionCmd('@PAXIA#$')" class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left flex items-center space-x-3 active:scale-95 transition">
+                            <i class="fa-solid fa-dog text-cyan-400 text-lg"></i>
+                            <div><div class="text-sm font-medium">趴下</div><div class="text-[10px] text-slate-400">PAXIA</div></div>
+                        </button>
+                        <button onclick="sendActionCmd('@DUNXIA#$')" class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left flex items-center space-x-3 active:scale-95 transition">
+                            <i class="fa-solid fa-angle-down text-purple-400 text-lg"></i>
+                            <div><div class="text-sm font-medium">蹲下</div><div class="text-[10px] text-slate-400">DUNXIA</div></div>
+                        </button>
+                        <button onclick="sendActionCmd('@WOSHOU#$')" class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left flex items-center space-x-3 active:scale-95 transition">
+                            <i class="fa-solid fa-handshake text-yellow-400 text-lg"></i>
+                            <div><div class="text-sm font-medium">握手</div><div class="text-[10px] text-slate-400">WOSHOU</div></div>
+                        </button>
+                        <button onclick="sendActionCmd('@ZUOFUWOCHENG#$')" class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left flex items-center space-x-3 active:scale-95 transition">
+                            <i class="fa-solid fa-dumbbell text-pink-400 text-lg"></i>
+                            <div><div class="text-sm font-medium">俯臥撐</div><div class="text-[10px] text-slate-400">ZUOFUWOCHENG</div></div>
+                        </button>
+                        <button onclick="sendActionCmd('@BAILAN#$')" class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left flex items-center space-x-3 active:scale-95 transition">
+                            <i class="fa-solid fa-bed text-blue-400 text-lg"></i>
+                            <div><div class="text-sm font-medium">擺爛</div><div class="text-[10px] text-slate-400">BAILAN</div></div>
+                        </button>
+                        <button onclick="sendActionCmd('@SAJIAO#$')" class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left flex items-center space-x-3 active:scale-95 transition">
+                            <i class="fa-solid fa-heart text-red-400 text-lg"></i>
+                            <div><div class="text-sm font-medium">撒嬌</div><div class="text-[10px] text-slate-400">SAJIAO</div></div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: COMBO MATRIX (1000+ ACTIONS) -->
+        <section id="panel-combo" class="space-y-4 hidden">
+            <div class="bg-cyber-card p-5 rounded-2xl border border-cyber-border shadow-md space-y-4">
+                <div class="border-b border-cyber-border pb-3">
+                    <h2 class="text-base font-bold text-cyan-400 flex items-center space-x-2">
+                        <i class="fa-solid fa-cubes-stacked"></i>
+                        <span>自由匹配 1000+ 動作組矩陣</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">自由組合「12 種 OLED 表情」 + 「50+ 肢體動作」 + 「重複次數」，突破語音晶片容量限制！</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-300 mb-1 font-medium">1. 選擇 OLED 表情</label>
+                        <select id="combo-face" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-cyan-300 focus:outline-none focus:border-cyan-500">
+                            <option value="Face_happy">Face_happy (開心)</option>
+                            <option value="Face_hello">Face_hello (抽象/招呼)</option>
+                            <option value="Face_eyes">Face_eyes (大眼睛)</option>
+                            <option value="Face_mania">Face_mania (生氣/狂暴)</option>
+                            <option value="Face_sleep">Face_sleep (睡覺)</option>
+                            <option value="Face_stare">Face_stare (嘿嘿/凝視)</option>
+                            <option value="Face_very_happy">Face_very_happy (超開心)</option>
+                            <option value="Face_right">Face_right (向右看)</option>
+                            <option value="Face_left">Face_left (向左看)</option>
+                            <option value="Face_block">Face_block (方塊眼)</option>
+                            <option value="Face_sad">Face_sad (傷心)</option>
+                            <option value="Face_emo">Face_emo (EMO/鬱悶)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-300 mb-1 font-medium">2. 選擇肢體動作</label>
+                        <select id="combo-action" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-purple-300 focus:outline-none focus:border-purple-500">
+                            <optgroup label="定點姿態">
+                                <option value="PAXIA">PAXIA (趴下)</option>
+                                <option value="LIZHENG">LIZHENG (立正)</option>
+                                <option value="DUNXIA">DUNXIA (蹲下)</option>
+                                <option value="JUEPIGU">JUEPIGU (撅屁股)</option>
+                                <option value="PINGBANZHICHENG">PINGBANZHICHENG (平板支撐)</option>
+                                <option value="WOSHOU">WOSHOU (握手)</option>
+                                <option value="GUIBAI">GUIBAI (跪拜)</option>
+                                <option value="ZUOFUWOCHENG">ZUOFUWOCHENG (做俯臥撐)</option>
+                                <option value="BAILAN">BAILAN (擺爛)</option>
+                                <option value="GOUDENGTUI">GOUDENGTUI (狗蹬腿)</option>
+                            </optgroup>
+                            <optgroup label="律動與趣味">
+                                <option value="YAOBAI">YAOBAI (搖擺)</option>
+                                <option value="BATU">BATU (扒土)</option>
+                                <option value="SAJIAO">SAJIAO (撒嬌)</option>
+                                <option value="DOUTUN">DOUTUN (抖臀)</option>
+                                <option value="YAOBUYUNDONG">YAOBUYUNDONG (腰部運動)</option>
+                                <option value="NIUYINIU">NIUYINIU (扭一扭)</option>
+                                <option value="GONGYIGONG">GONGYIGONG (拱一拱)</option>
+                                <option value="BOLANGYUNDONG">BOLANGYUNDONG (波浪運動)</option>
+                                <option value="MANMANNIU">MANMANNIU (慢慢扭)</option>
+                                <option value="XUANFENGTUI">XUANFENGTUI (旋風腿)</option>
+                                <option value="DOUZUOTUI">DOUZUOTUI (抖左腿)</option>
+                                <option value="DOUYOUTUI">DOUYOUTUI (抖右腿)</option>
+                                <option value="CESHENYUNDONG">CESHENYUNDONG (側身運動)</option>
+                                <option value="YAOYIYAO">YAOYIYAO (搖一搖)</option>
+                                <option value="YAOWEIBA">YAOWEIBA (搖尾巴)</option>
+                            </optgroup>
+                            <optgroup label="步態位移">
+                                <option value="QIANJIN">QIANJIN (前進)</option>
+                                <option value="HOUTUI">HOUTUI (後退)</option>
+                                <option value="ZUOZHUAN">ZUOZHUAN (左轉)</option>
+                                <option value="YOUZHUAN">YOUZHUAN (右轉)</option>
+                                <option value="LIANXUXIANGQIAN">LIANXUXIANGQIAN (連續向前)</option>
+                                <option value="LIANXUXIANGHOU">LIANXUXIANGHOU (連續向後)</option>
+                                <option value="ZHUANQUANQUAN">ZHUANQUANQUAN (轉圈圈)</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-300 mb-1 font-medium">3. 執行重複次數</label>
+                        <select id="combo-repeat" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-pink-300 focus:outline-none focus:border-pink-500">
+                            <option value="1">1 次</option>
+                            <option value="2">2 次</option>
+                            <option value="3">3 次</option>
+                            <option value="5">5 次</option>
+                            <option value="10">10 次</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div class="text-xs">
+                        <span class="text-slate-500 block">預覽傳送序列：</span>
+                        <code id="combo-preview" class="font-mono text-cyan-400 text-sm">@Face_happy#$ ➔ @PAXIA#$ (x1)</code>
+                    </div>
+                    <button onclick="executeCombo()" class="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-bold text-xs rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition">
+                        <i class="fa-solid fa-play mr-1"></i> 立即執行組合
+                    </button>
+                </div>
+
+                <div class="pt-2">
+                    <span class="text-xs text-slate-400 block mb-2">熱門推薦組合 (一鍵執行)：</span>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <button onclick="executeCustomCombo('Face_mania','ZUOFUWOCHENG',3)" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-left active:scale-95 transition">
+                            <span class="text-pink-400 font-bold block">😠 生氣做俯臥撐 x3</span>
+                            <span class="text-[10px] text-slate-400">Face_mania + ZUOFUWOCHENG x3</span>
+                        </button>
+                        <button onclick="executeCustomCombo('Face_emo','BAILAN',1)" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-left active:scale-95 transition">
+                            <span class="text-blue-400 font-bold block">😭 EMO 擺爛</span>
+                            <span class="text-[10px] text-slate-400">Face_emo + BAILAN</span>
+                        </button>
+                        <button onclick="executeCustomCombo('Face_hello','DOUTUN',5)" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-left active:scale-95 transition">
+                            <span class="text-yellow-400 font-bold block">😜 招呼抖臀 x5</span>
+                            <span class="text-[10px] text-slate-400">Face_hello + DOUTUN x5</span>
+                        </button>
+                        <button onclick="executeCustomCombo('Face_happy','DUNXIA',1)" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-left active:scale-95 transition">
+                            <span class="text-green-400 font-bold block">😊 開心下蹲</span>
+                            <span class="text-[10px] text-slate-400">Face_happy + DUNXIA</span>
+                        </button>
+                        <button onclick="executeCustomCombo('Face_very_happy','SAJIAO',2)" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-left active:scale-95 transition">
+                            <span class="text-cyan-400 font-bold block">🤩 超開心撒嬌 x2</span>
+                            <span class="text-[10px] text-slate-400">Face_very_happy + SAJIAO x2</span>
+                        </button>
+                        <button onclick="executeCustomCombo('Face_stare','GUIBAI',1)" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-left active:scale-95 transition">
+                            <span class="text-purple-400 font-bold block">😏 凝視跪拜</span>
+                            <span class="text-[10px] text-slate-400">Face_stare + GUIBAI</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: AUDIO PLAYER (ID 0 ~ 500) -->
+        <section id="panel-audio" class="space-y-4 hidden">
+            <div class="bg-cyber-card p-5 rounded-2xl border border-cyber-border shadow-md space-y-4">
+                <div class="border-b border-cyber-border pb-3 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-base font-bold text-yellow-400 flex items-center space-x-2">
+                            <i class="fa-solid fa-compact-disc"></i>
+                            <span>ASR 音檔遙控播放器 (ID 0 ~ 500)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">發送 <code class="text-yellow-400">@PLAY:ID#$</code> 指令，自動喚醒晶片並播放 0 ~ 500 號自訂音檔！</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs text-slate-300 font-medium">選取音檔 ID (0 ~ 500)：</label>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="adjustAudioId(-1)" class="w-7 h-7 bg-slate-800 rounded-lg text-slate-300 font-bold hover:bg-slate-700 active:scale-95">-</button>
+                            <input type="number" id="audio-id-input" min="0" max="500" value="131" oninput="syncAudioIdInput()" class="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono text-sm text-yellow-400 font-bold focus:outline-none focus:border-yellow-500">
+                            <button onclick="adjustAudioId(1)" class="w-7 h-7 bg-slate-800 rounded-lg text-slate-300 font-bold hover:bg-slate-700 active:scale-95">+</button>
+                        </div>
+                    </div>
+
+                    <input type="range" id="audio-id-slider" min="0" max="500" value="131" oninput="syncAudioIdSlider()" class="w-full accent-yellow-400 cursor-pointer">
+
+                    <div class="flex justify-between items-center pt-2">
+                        <span class="text-xs text-slate-400">預覽傳送：<code id="audio-cmd-preview" class="text-yellow-400 font-mono">@PLAY:131#$</code></span>
+                        <button onclick="playSelectedAudio()" class="px-5 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg active:scale-95 transition">
+                            <i class="fa-solid fa-volume-high mr-1"></i> 立即播放音檔
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <span class="text-xs text-slate-400 block font-medium">經典預設音效與音樂卡片：</span>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button onclick="playAudio(0)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-yellow-400">🙋 ID 0 ([0]在.mp3)</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:0#$</div>
+                        </button>
+                        <button onclick="playAudio(10506)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-yellow-400">🐶 狗叫 (汪汪)</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:10506#$</div>
+                        </button>
+                        <button onclick="playAudio(10508)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-yellow-400">🐱 學貓叫 (喵)</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:10508#$</div>
+                        </button>
+                        <button onclick="playAudio(10547)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-yellow-400">🎂 生日歌哈基米</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:10547#$</div>
+                        </button>
+                        <button onclick="playAudio(10573)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-yellow-400">🎵 今天你要哈基米</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:10573#$</div>
+                        </button>
+                        <button onclick="playAudio(131)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-cyan-400">🎼 自訂音檔 ID: 131</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:131#$</div>
+                        </button>
+                        <button onclick="playAudio(132)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-cyan-400">🎼 自訂音檔 ID: 132</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:132#$</div>
+                        </button>
+                        <button onclick="playAudio(500)" class="p-3 bg-slate-800 hover:bg-yellow-950/30 border border-slate-700 hover:border-yellow-500/50 rounded-xl text-left active:scale-95 transition">
+                            <div class="text-xs font-bold text-cyan-400">🎼 自訂音檔 ID: 500</div>
+                            <div class="text-[10px] text-slate-400">@PLAY:500#$</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: SEQUENCE SCRIPT BUILDER -->
+        <section id="panel-sequence" class="space-y-4 hidden">
+            <div class="bg-cyber-card p-5 rounded-2xl border border-cyber-border shadow-md space-y-4">
+                <div class="border-b border-cyber-border pb-3 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-base font-bold text-green-400 flex items-center space-x-2">
+                            <i class="fa-solid fa-film"></i>
+                            <span>自動化劇本動作鏈 (Sequence Builder)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">連續執行一系列動作、表情與音樂播放。</p>
+                    </div>
+                    <button onclick="runSequence()" id="run-seq-btn" class="px-4 py-2 bg-green-500 hover:bg-green-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition active:scale-95 flex items-center space-x-1">
+                        <i class="fa-solid fa-play"></i><span>播放劇本</span>
+                    </button>
+                </div>
+
+                <div id="sequence-list" class="space-y-2 min-h-[120px] bg-slate-900/60 p-3 rounded-xl border border-slate-800"></div>
+
+                <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 flex flex-wrap gap-2 items-center">
+                    <select id="seq-type" onchange="toggleSeqInputType()" class="bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-200">
+                        <option value="CMD">發送指令 (如 @PAXIA#$)</option>
+                        <option value="PLAY">播放音檔 (如 131)</option>
+                        <option value="DELAY">停頓延遲 (毫秒)</option>
+                    </select>
+
+                    <input type="text" id="seq-val" placeholder="輸入數據 (例如 @PAXIA#$)" class="flex-1 min-w-[140px] bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-cyan-300 font-mono focus:outline-none">
+
+                    <button onclick="addSequenceStep()" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg active:scale-95 transition">
+                        <i class="fa-solid fa-plus mr-1"></i>加入步驟
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: TERMINAL & LOGS -->
+        <section id="panel-terminal" class="space-y-4 hidden">
+            <div class="bg-cyber-card p-5 rounded-2xl border border-cyber-border shadow-md space-y-3">
+                <div class="flex justify-between items-center border-b border-cyber-border pb-2">
+                    <h2 class="text-sm font-bold text-slate-300 flex items-center space-x-2">
+                        <i class="fa-solid fa-terminal text-cyan-400"></i>
+                        <span>串口數據監視器 (Terminal)</span>
+                    </h2>
+                    <button onclick="clearLog()" class="text-xs text-slate-400 hover:text-white"><i class="fa-solid fa-trash mr-1"></i>清除</button>
+                </div>
+
+                <div id="terminal-log" class="h-64 bg-slate-950 font-mono text-xs p-3 rounded-xl border border-slate-800 overflow-y-auto space-y-1 text-slate-300">
+                    <div class="text-slate-500">[系統初始化完成] 準備連接機器狗藍芽...</div>
+                </div>
+
+                <div class="flex space-x-2">
+                    <input type="text" id="manual-cmd" placeholder="自訂指令 (例如 @PAXIA#$ 或 @PLAY:131#$)" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                    <button onclick="sendManualCmd()" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs rounded-xl active:scale-95 transition">發送</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-[11px] text-slate-500 py-3 border-t border-cyber-border/50">
+        桌寵狗藍牙控制器 &copy; 2026 | 相容 iOS (Bluefy) & Android (Chrome)
+    </footer>
+
+    <script>
+        let bluetoothDevice = null;
+        let gattServer = null;
+        let rxTxCharacteristic = null;
+        let isConnected = false;
+        let isExecutingSequence = false;
+
+        let sequenceSteps = [
+            { type: 'CMD', val: '@Face_happy#$', desc: '表情：開心' },
+            { type: 'DELAY', val: '200', desc: '延遲 200ms' },
+            { type: 'CMD', val: '@PAXIA#$', desc: '動作：趴下' },
+            { type: 'DELAY', val: '1000', desc: '延遲 1000ms' },
+            { type: 'PLAY', val: '131', desc: '音檔：ID 131' }
+        ];
+
+        async function toggleBluetooth() {
+            if (isConnected) {
+                disconnectBluetooth();
+                return;
+            }
+
+            if (!navigator.bluetooth) {
+                showToast('瀏覽器未開啟 Web Bluetooth 支持，已切換至模擬模式');
+                logTerminal('SYSTEM', '⚠️ 提示: 當前環境不支援 Web Bluetooth。iOS 請使用 Bluefy App 打開。', 'yellow');
+                isConnected = true;
+                updateBtUI(true, '模擬連線中');
+                return;
+            }
+
+            try {
+                logTerminal('BT', '正在搜尋藍芽裝置 (JDY-31 / HC-05 / BLE)...', 'cyan');
+                
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '0000ffe0-0000-1000-8000-00805f9b34fb',
+                        '0000ffe1-0000-1000-8000-00805f9b34fb',
+                        '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+                    ]
+                });
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                logTerminal('BT', `已選取裝置: ${bluetoothDevice.name || '未知裝置'}，連線 GATT...`, 'cyan');
+
+                gattServer = await bluetoothDevice.gatt.connect();
+
+                let service = null;
+                try {
+                    service = await gattServer.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+                    rxTxCharacteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+                } catch (e1) {
+                    try {
+                        service = await gattServer.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+                        rxTxCharacteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+                    } catch (e2) {
+                        const services = await gattServer.getPrimaryServices();
+                        if (services.length > 0) {
+                            service = services[0];
+                            const characteristics = await service.getCharacteristics();
+                            if (characteristics.length > 0) {
+                                rxTxCharacteristic = characteristics[0];
+                            }
+                        }
+                    }
+                }
+
+                if (rxTxCharacteristic) {
+                    isConnected = true;
+                    updateBtUI(true, bluetoothDevice.name || '已連接藍芽');
+                    logTerminal('BT', `✅ 藍芽連線成功！裝置名: ${bluetoothDevice.name || 'RobotDog'}`, 'green');
+                    showToast(`已成功連接至 ${bluetoothDevice.name || '藍芽裝置'}`);
+                } else {
+                    throw new Error('未找到可用的 UART 特徵值 (Characteristic)');
+                }
+            } catch (error) {
+                logTerminal('BT', `❌ 連線失敗/取消: ${error.message}`, 'red');
+                showToast(`藍芽連線失敗: ${error.message}`);
+            }
+        }
+
+        function disconnectBluetooth() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            }
+            onDisconnected();
+        }
+
+        function onDisconnected() {
+            isConnected = false;
+            rxTxCharacteristic = null;
+            bluetoothDevice = null;
+            updateBtUI(false, '連接藍芽');
+            logTerminal('BT', '⚠️ 藍芽連線已斷開', 'yellow');
+            showToast('藍芽連線已斷開');
+        }
+
+        function updateBtUI(connected, text) {
+            const btn = document.getElementById('connectBtn');
+            const icon = document.getElementById('btIcon');
+            const statusText = document.getElementById('btStatusText');
+
+            statusText.innerText = text;
+            if (connected) {
+                btn.className = "px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center space-x-2 transition-all duration-200 active:scale-95 shadow-md glow-cyan";
+                icon.className = "fa-solid fa-bluetooth-b text-base";
+            } else {
+                btn.className = "px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium text-sm flex items-center space-x-2 transition-all duration-200 active:scale-95 shadow-md";
+                icon.className = "fa-solid fa-bluetooth text-base";
+            }
+        }
+
+        async function sendCmd(cmdStr) {
+            logTerminal('TX', cmdStr, 'cyan');
+
+            if (!isConnected || !rxTxCharacteristic) {
+                showToast(`[模擬發送] ${cmdStr}`);
+                return;
+            }
+
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(cmdStr);
+                // 優先使用 writeValueWithoutResponse 提升傳輸響應速度，若不支援則降級為 writeValue
+                if (rxTxCharacteristic.properties.writeWithoutResponse) {
+                    await rxTxCharacteristic.writeValueWithoutResponse(data);
+                } else if (rxTxCharacteristic.properties.write) {
+                    await rxTxCharacteristic.writeValue(data);
+                } else {
+                    await rxTxCharacteristic.writeValue(data);
+                }
+            } catch (error) {
+                logTerminal('SYSTEM', `❌ 發送失敗: ${error.message}`, 'red');
+            }
+        }
+
+        async function sendActionCmd(actionStr, faceStr = null) {
+            const currentFace = faceStr || document.getElementById('combo-face')?.value || 'Face_happy';
+            await sendCmd(`@${currentFace}#$`);
+            await new Promise(r => setTimeout(r, 90));
+            await sendCmd(actionStr);
+        }
+
+        function switchTab(tabName) {
+            const tabs = ['remote', 'combo', 'audio', 'sequence', 'terminal'];
+            tabs.forEach(t => {
+                const panel = document.getElementById(`panel-${t}`);
+                const tabBtn = document.getElementById(`tab-${t}`);
+                if (t === tabName) {
+                    panel.classList.remove('hidden');
+                    tabBtn.className = "py-3 px-3 active-tab transition-colors flex items-center space-x-1.5 font-bold";
+                } else {
+                    panel.classList.add('hidden');
+                    tabBtn.className = "py-3 px-3 text-slate-400 hover:text-cyan-400 transition-colors flex items-center space-x-1.5";
+                }
+            });
+        }
+
+        function updateComboPreview() {
+            const face = document.getElementById('combo-face').value;
+            const action = document.getElementById('combo-action').value;
+            const repeat = document.getElementById('combo-repeat').value;
+            const cmd = `@${face}#$ ➔ @${action}#$ (x${repeat})`;
+            document.getElementById('combo-preview').innerText = cmd;
+        }
+
+        async function executeCombo() {
+            const face = document.getElementById('combo-face').value;
+            const action = document.getElementById('combo-action').value;
+            const repeat = parseInt(document.getElementById('combo-repeat').value) || 1;
+            await executeCustomCombo(face, action, repeat);
+        }
+
+        async function executeCustomCombo(face, action, repeat) {
+            logTerminal('COMBO', `🚀 執行組合：${face} + ${action} (x${repeat})`, 'purple');
+            await sendCmd(`@${face}#$`);
+            await new Promise(r => setTimeout(r, 100));
+
+            for (let i = 0; i < repeat; i++) {
+                await sendCmd(`@${action}#$`);
+                if (i < repeat - 1) {
+                    await new Promise(r => setTimeout(r, 1200));
+                }
+            }
+        }
+
+        function syncAudioIdInput() {
+            let val = parseInt(document.getElementById('audio-id-input').value);
+            if (isNaN(val) || val < 0) val = 0;
+            if (val > 500) val = 500;
+            document.getElementById('audio-id-slider').value = val;
+            document.getElementById('audio-cmd-preview').innerText = `@PLAY:${val}#$`;
+        }
+
+        function syncAudioIdSlider() {
+            let val = document.getElementById('audio-id-slider').value;
+            document.getElementById('audio-id-input').value = val;
+            document.getElementById('audio-cmd-preview').innerText = `@PLAY:${val}#$`;
+        }
+
+        function adjustAudioId(delta) {
+            let val = parseInt(document.getElementById('audio-id-input').value) || 131;
+            val += delta;
+            if (val < 0) val = 0;
+            if (val > 500) val = 500;
+            document.getElementById('audio-id-input').value = val;
+            syncAudioIdInput();
+        }
+
+        function playSelectedAudio() {
+            let id = document.getElementById('audio-id-input').value;
+            playAudio(id);
+        }
+
+        function playAudio(id) {
+            sendCmd(`@PLAY:${id}#$`);
+        }
+
+        function renderSequenceList() {
+            const list = document.getElementById('sequence-list');
+            if (sequenceSteps.length === 0) {
+                list.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">尚未加入步驟，請使用下方表單新增！</div>`;
+                return;
+            }
+
+            list.innerHTML = sequenceSteps.map((step, idx) => `
+                <div class="flex items-center justify-between bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700/50 text-xs">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-5 h-5 bg-slate-700 text-cyan-400 rounded-full flex items-center justify-center text-[10px] font-bold font-mono">${idx + 1}</span>
+                        <span class="px-2 py-0.5 rounded font-mono text-[10px] ${step.type === 'CMD' ? 'bg-cyan-950 text-cyan-400 border border-cyan-800' : step.type === 'PLAY' ? 'bg-yellow-950 text-yellow-400 border border-yellow-800' : 'bg-purple-950 text-purple-400 border border-purple-800'}">${step.type}</span>
+                        <span class="font-mono text-slate-200">${step.desc || step.val}</span>
+                    </div>
+                    <button onclick="removeSequenceStep(${idx})" class="text-slate-400 hover:text-red-400 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            `).join('');
+        }
+
+        function toggleSeqInputType() {
+            const type = document.getElementById('seq-type').value;
+            const input = document.getElementById('seq-val');
+            if (type === 'CMD') input.placeholder = "輸入指令 (例如 @PAXIA#$)";
+            else if (type === 'PLAY') input.placeholder = "輸入音檔 ID (例如 131)";
+            else if (type === 'DELAY') input.placeholder = "延遲毫秒 (例如 1000)";
+        }
+
+        function addSequenceStep() {
+            const type = document.getElementById('seq-type').value;
+            const val = document.getElementById('seq-val').value.trim();
+            if (!val) {
+                showToast('請輸入有效數值！');
+                return;
+            }
+
+            let desc = val;
+            if (type === 'PLAY') desc = `音檔 ID: ${val}`;
+            else if (type === 'DELAY') desc = `延遲 ${val} ms`;
+
+            sequenceSteps.push({ type, val, desc });
+            renderSequenceList();
+            document.getElementById('seq-val').value = '';
+        }
+
+        function removeSequenceStep(index) {
+            sequenceSteps.splice(index, 1);
+            renderSequenceList();
+        }
+
+        async function runSequence() {
+            if (isExecutingSequence) return;
+            if (sequenceSteps.length === 0) {
+                showToast('劇本內容為空！');
+                return;
+            }
+
+            isExecutingSequence = true;
+            const runBtn = document.getElementById('run-seq-btn');
+            runBtn.disabled = true;
+            runBtn.className = "px-4 py-2 bg-slate-700 text-slate-400 font-bold text-xs rounded-xl shadow-md cursor-not-allowed flex items-center space-x-1";
+            runBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>執行中...</span>`;
+
+            logTerminal('SEQ', '▶ 開始執行自動化劇本...', 'green');
+
+            for (let i = 0; i < sequenceSteps.length; i++) {
+                const step = sequenceSteps[i];
+                logTerminal('SEQ', `步驟 ${i + 1}: ${step.desc}`, 'green');
+
+                if (step.type === 'CMD') {
+                    await sendCmd(step.val);
+                } else if (step.type === 'PLAY') {
+                    playAudio(step.val);
+                } else if (step.type === 'DELAY') {
+                    const ms = parseInt(step.val) || 500;
+                    await new Promise(r => setTimeout(r, ms));
+                }
+
+                await new Promise(r => setTimeout(r, 120));
+            }
+
+            logTerminal('SEQ', '✅ 劇本執行完畢！', 'green');
+            showToast('劇本執行完畢！');
+
+            isExecutingSequence = false;
+            runBtn.disabled = false;
+            runBtn.className = "px-4 py-2 bg-green-500 hover:bg-green-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition active:scale-95 flex items-center space-x-1";
+            runBtn.innerHTML = `<i class="fa-solid fa-play"></i><span>播放劇本</span>`;
+        }
+
+        function logTerminal(tag, message, color = 'slate') {
+            const logBox = document.getElementById('terminal-log');
+            const colorMap = {
+                cyan: 'text-cyan-400',
+                green: 'text-emerald-400',
+                purple: 'text-purple-400',
+                yellow: 'text-amber-400',
+                red: 'text-red-400',
+                slate: 'text-slate-300'
+            };
+
+            const timeStr = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = colorMap[color] || 'text-slate-300';
+            div.innerHTML = `<span class="text-slate-600">[${timeStr}]</span> <span class="font-bold">[${tag}]</span> ${message}`;
+            
+            logBox.appendChild(div);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('terminal-log').innerHTML = `<div class="text-slate-500">[日誌已清除]</div>`;
+        }
+
+        function sendManualCmd() {
+            const input = document.getElementById('manual-cmd');
+            const val = input.value.trim();
+            if (val) {
+                sendCmd(val);
+                input.value = '';
+            }
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'bg-slate-800/90 text-slate-100 text-xs px-4 py-2.5 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto';
+            toast.innerHTML = `<i class="fa-solid fa-circle-info text-cyan-400 mr-2"></i>${msg}`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        window.onload = function() {
+            document.getElementById('combo-face').addEventListener('change', updateComboPreview);
+            document.getElementById('combo-action').addEventListener('change', updateComboPreview);
+            document.getElementById('combo-repeat').addEventListener('change', updateComboPreview);
+            renderSequenceList();
+            logTerminal('SYSTEM', '遙控器介面已就緒，請點擊「連接藍芽」按鈕開始。', 'cyan');
+        };
+    </script>
+</body>
+</html>

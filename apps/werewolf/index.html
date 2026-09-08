@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>暗夜狼人殺 - 多人在線 AI 對決版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&family=Outfit:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Outfit', 'Noto Serif TC', serif;
+            background-color: #080c14;
+            color: #e2e8f0;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(30, 27, 75, 0.6) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(88, 28, 28, 0.4) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        .night-theme {
+            background-color: #05070e;
+            box-shadow: inset 0 0 120px rgba(15, 23, 42, 0.95);
+        }
+
+        .day-theme {
+            background-color: #12131c;
+            box-shadow: inset 0 0 90px rgba(217, 119, 6, 0.15);
+        }
+
+        .glass-card {
+            background: rgba(15, 21, 36, 0.8);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card-glow {
+            background: rgba(28, 36, 56, 0.9);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            box-shadow: 0 0 30px rgba(220, 38, 38, 0.2);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.5); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.8); }
+
+        .pulse-border {
+            animation: pulse-border-anim 2s infinite;
+        }
+
+        @keyframes pulse-border-anim {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.4); }
+            50% { border-color: rgba(245, 158, 11, 0.9); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-red-900 selection:text-white">
+
+<div id="app" class="flex-grow flex flex-col max-w-6xl w-full mx-auto p-3 sm:p-6 transition-colors duration-1000" :class="isNight ? 'night-theme' : 'day-theme'">
+    
+    <!-- Toast Notification Overlay -->
+    <div v-if="toastMessage" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-2xl flex items-center gap-2 border border-amber-300 animate-bounce">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>{{ toastMessage }}</span>
+    </div>
+
+    <!-- Header / Navbar -->
+    <header class="flex flex-wrap justify-between items-center pb-4 mb-4 border-b border-slate-800 gap-3">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-900 to-slate-900 flex items-center justify-center border border-red-500/30 text-red-400 font-bold text-xl shadow-lg">
+                <i class="fa-solid fa-spaghetti-monster-flying text-red-500" v-if="isNight"></i>
+                <i class="fa-solid fa-sun text-amber-500" v-else></i>
+            </div>
+            <div>
+                <h1 class="font-black text-xl tracking-wider bg-gradient-to-r from-red-400 via-slate-200 to-amber-200 bg-clip-text text-transparent">
+                    暗黑狼人殺 <span class="text-xs px-2 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-800/50 font-normal">Gemini 2.5 邏輯升級版</span>
+                </h1>
+                <p class="text-xs text-slate-400">Gemini 2.5 Flash + {{ networkModeText }}</p>
+            </div>
+        </div>
+
+        <!-- Room Header Controls -->
+        <div class="flex items-center gap-2 flex-wrap">
+            <div v-if="roomId" class="px-3 py-1.5 rounded-lg text-xs font-bold glass-card border-amber-500/40 text-amber-300 flex items-center gap-2 pulse-border">
+                <i class="fa-solid fa-door-open"></i>
+                <span>房號: {{ roomCode }}</span>
+                <button @click="copyRoomCode" class="ml-1 hover:text-white text-slate-400" title="複製房號">
+                    <i class="fa-solid fa-copy"></i>
+                </button>
+            </div>
+
+            <button @click="showApiModal = true" class="px-3 py-1.5 rounded-lg text-xs font-semibold glass-card border-slate-700 hover:border-amber-500/50 text-amber-300 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-key"></i>
+                <span class="hidden sm:inline">{{ apiKey ? aiModel + ' 已設定' : 'API Key' }}</span>
+            </button>
+
+            <button v-if="roomId" @click="leaveRoom" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-950/80 hover:bg-red-900 border border-red-800/60 text-red-300 transition flex items-center gap-1">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                <span class="hidden sm:inline">離開房間</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Room Lobby Creation Modal (If not inside a room) -->
+    <div v-if="!roomId" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div class="glass-card max-w-md w-full p-6 rounded-2xl border border-slate-700 shadow-2xl text-center space-y-6">
+            <div>
+                <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-tr from-amber-500 to-red-600 flex items-center justify-center text-slate-950 text-3xl font-black shadow-xl">
+                    <i class="fa-solid fa-wolf-pack-battalion"></i>
+                </div>
+                <h2 class="text-xl font-bold text-slate-100">建立或加入對局</h2>
+                <p class="text-xs text-slate-400 mt-1">連線模式：<span class="text-amber-400 font-semibold">{{ networkModeText }}</span>（無須後端資料庫即可跨裝置連線）</p>
+            </div>
+
+            <div class="space-y-3 text-left">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">您的玩家暱稱</label>
+                    <input type="text" v-model="playerNameInput" placeholder="例如：夜月探長" class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">房間號碼 (加入朋友房間請填寫)</label>
+                    <input type="text" v-model="joinCodeInput" placeholder="4 位數房號 (例如: 8888)" maxlength="4" class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono tracking-widest text-center text-lg">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <button @click="createRoom" :disabled="!playerNameInput.trim() || isConnecting" class="py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid" :class="isConnecting ? 'fa-spinner animate-spin' : 'fa-plus-circle'"></i> 建立全新房間
+                </button>
+                <button @click="joinRoom" :disabled="!playerNameInput.trim() || !joinCodeInput.trim() || isConnecting" class="py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid" :class="isConnecting ? 'fa-spinner animate-spin' : 'fa-right-to-bracket'"></i> 輸入房號加入
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Setup Modal -->
+    <div v-if="showApiModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div class="glass-card max-w-md w-full p-6 rounded-2xl border border-slate-700 shadow-2xl relative">
+            <h3 class="text-lg font-bold text-slate-100 mb-2 flex items-center gap-2">
+                <i class="fa-solid fa-microchip text-amber-400"></i> 設定 Gemini API Key
+            </h3>
+            <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+                房主填寫 API Key 後，AI 會掌握完整對局紀錄與各自的私密資訊（狼隊友、查驗結果、藥劑），自行決定夜間行動、發言與投票，並跨天記憶自己的推理。免費 Key 建議用 Flash-Lite（每天約 1,000 次、每分鐘 15 次，一局遊戲約用 25–40 次）。若呼叫失敗可在下方切換模型。
+            </p>
+            
+            <div class="mb-3">
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Google AI Studio API Key</label>
+                <input type="password" v-model="apiKeyInput" placeholder="AIzaSy..." class="w-full px-3 py-2 bg-slate-900/90 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-xs font-semibold text-slate-300 mb-1">呼叫模型</label>
+                <select v-model="aiModelInput" class="w-full px-3 py-2 bg-slate-900/90 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono">
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite（免費額度最寬，建議）</option>
+                    <option value="gemini-3.5-flash">gemini-3.5-flash（免費層有，較聰明但額度緊）</option>
+                    <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+                    <option value="gemini-3.6-flash">gemini-3.6-flash（最新，可能需付費層）</option>
+                </select>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button @click="showApiModal = false" class="px-4 py-2 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 transition">取消</button>
+                <button @click="saveApiKey" class="px-4 py-2 rounded-lg text-xs bg-amber-600 hover:bg-amber-500 text-white font-bold transition">儲存並應用</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Game Arena -->
+    <div v-if="roomId" class="flex-grow grid grid-cols-1 lg:grid-cols-12 gap-4 my-2">
+        
+        <!-- Left Column: Seats & Action Controls (7 cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+            
+            <!-- Phase Status Bar -->
+            <div class="glass-card p-4 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-3 h-3 rounded-full" :class="isNight ? 'bg-indigo-500 animate-pulse' : 'bg-amber-500 animate-pulse'"></div>
+                    <div>
+                        <div class="text-xs text-slate-400 font-medium">第 {{ roomData?.dayCount || 1 }} {{ isNight ? '夜' : '天' }}</div>
+                        <div class="text-base font-bold text-slate-100">{{ currentPhaseTitle }}</div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs px-2.5 py-1 rounded-full font-mono font-bold" 
+                          :class="isNight ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' : 'bg-amber-950 text-amber-300 border border-amber-800'">
+                        {{ phaseStatusText }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Player Seats (6 Seats Grid) -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div v-for="player in roomPlayers" :key="player.id" 
+                     class="glass-card p-3 rounded-xl border transition-all duration-300 relative overflow-hidden flex flex-col justify-between h-40"
+                     :class="[
+                        player.isAlive ? 'border-slate-800 hover:border-slate-700' : 'opacity-50 border-red-950/40 bg-slate-950/80',
+                        player.uid === currentUid ? 'ring-2 ring-amber-500/50 bg-slate-900/90' : '',
+                        roomData?.currentSpeakerSeat === player.id ? 'glass-card-glow ring-2 ring-red-500' : ''
+                     ]">
+                    
+                    <!-- Player Header -->
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold font-mono"
+                                  :class="player.uid === currentUid ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'">
+                                {{ player.id }}
+                            </span>
+                            <span class="text-xs font-bold text-slate-200 truncate max-w-[80px]">{{ player.name }}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span v-if="player.isAi" class="text-[9px] px-1 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">AI</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                                  :class="player.isAlive ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' : 'bg-red-950 text-red-400 border border-red-900/50'">
+                                {{ player.isAlive ? '存活' : '陣亡' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Role Badge -->
+                    <div class="my-2 text-center">
+                        <template v-if="player.uid === currentUid || gameState === 'GAME_OVER'">
+                            <div class="inline-block px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide" :class="getRoleBadgeClass(player.role)">
+                                <i :class="getRoleIcon(player.role)" class="mr-1"></i>
+                                {{ getRoleName(player.role) }}
+                            </div>
+                        </template>
+                        <template v-else-if="myRole === 'werewolf' && player.role === 'werewolf'">
+                            <div class="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-red-950 text-red-400 border border-red-800">
+                                <i class="fa-solid fa-wolf-pack-battalion mr-1"></i> 狼隊友
+                            </div>
+                        </template>
+                        <template v-else>
+                            <div class="text-xs text-slate-500 font-mono"><i class="fa-solid fa-user-secret mr-1"></i> 身份隱藏</div>
+                        </template>
+                    </div>
+
+                    <!-- Speech / Vote Badge -->
+                    <div class="text-[11px] text-slate-400 truncate">
+                        <span v-if="player.lastSpeech" class="italic text-slate-300">"{{ player.lastSpeech }}"</span>
+                        <span v-else-if="player.votedFor !== null" class="text-amber-400 font-semibold"><i class="fa-solid fa-check text-xs"></i> 已投票給 {{ player.votedFor }} 號</span>
+                    </div>
+
+                    <!-- Target Selection Overlay -->
+                    <button v-if="selectableTargets.includes(player.id)" 
+                            @click="selectTarget(player.id)" 
+                            class="absolute inset-0 bg-red-950/85 backdrop-blur-sm border-2 border-red-500 rounded-xl flex items-center justify-center font-bold text-xs text-red-200 hover:bg-red-900/90 transition shadow-2xl">
+                        <i class="fa-solid fa-crosshairs mr-1"></i> 點擊選定對象
+                    </button>
+                </div>
+            </div>
+
+            <!-- Human Action Console -->
+            <div class="glass-card p-4 rounded-xl border border-slate-800 mt-auto space-y-3">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                    <span><i class="fa-solid fa-gamepad text-amber-400 mr-1"></i> 你的控制台 ({{ mySeat ? mySeat + '號席位' : '未入座' }})</span>
+                    <span v-if="myRole" class="text-amber-400 font-normal">底牌: {{ getRoleName(myRole) }}</span>
+                </div>
+
+                <!-- Lobby Host Start Button -->
+                <div v-if="gameState === 'LOBBY'" class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <p class="text-xs text-slate-300">目前房間人數: <span class="text-amber-400 font-bold">{{ roomPlayers.length }}/6</span> 真人玩家</p>
+                    <button v-if="isHost" @click="startGameWithAiFill" class="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-play"></i> AI 補滿 6 人並開啟對局
+                    </button>
+                    <span v-else class="text-xs text-slate-500 italic">等待房主開啟遊戲...</span>
+                </div>
+
+                <!-- Game Active Action Prompts -->
+                <div v-else class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <p class="text-xs text-slate-300 leading-relaxed flex-grow">{{ userInstructionText }}</p>
+
+                    <!-- Interactive Action Buttons -->
+                    <div class="flex gap-2 flex-shrink-0 w-full sm:w-auto flex-wrap justify-end">
+                        <button v-if="canSpeakNow" @click="isWritingSpeech = true" class="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-lg text-xs font-bold shadow-lg transition">
+                            發表發言
+                        </button>
+
+                        <button v-if="canUseWitchHeal" @click="useWitchHeal" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs shadow-lg transition">
+                            <i class="fa-solid fa-notes-medical mr-1"></i> 使用解藥救人 ({{ killedTargetId }}號)
+                        </button>
+
+                        <button v-if="canSkipWitch" @click="skipWitchAction" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition">
+                            不使用藥劑
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Speech Input Box -->
+                <div v-if="isWritingSpeech" class="flex gap-2 pt-2 border-t border-slate-800">
+                    <input type="text" v-model="humanSpeechText" placeholder="輸入發言內容..." class="flex-grow px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                    <button @click="submitSpeech" class="px-4 py-2 bg-amber-600 text-slate-950 hover:bg-amber-500 font-bold text-xs rounded-lg transition">送出</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: AI Thoughts Terminal & Game Log (5 cols) -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- AI Reasoning Console (Thought Log) -->
+            <div class="glass-card p-4 rounded-xl border border-slate-800 flex flex-col h-44">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-brain"></i> AI 邏輯思考日誌 (Gemini 2.5 Flash)
+                    </span>
+                    <span class="text-[10px] text-slate-500 font-mono" v-if="isAiThinking">
+                        <i class="fa-solid fa-spinner animate-spin mr-1"></i> 推理中...
+                    </span>
+                </div>
+                <div class="flex-grow overflow-y-auto bg-slate-950/80 p-3 rounded-lg border border-slate-900 font-mono text-[11px] text-slate-300 space-y-2" ref="thoughtBox">
+                    <div v-if="aiThoughts.length === 0" class="text-slate-600 italic">開局後，Gemini 2.5 Flash AI 的思考推理過程將在此處實時呈現...</div>
+                    <div v-for="(thought, idx) in aiThoughts" :key="idx" class="border-l-2 border-amber-500/50 pl-2">
+                        <span class="text-amber-400 font-semibold">[{{ thought.speaker }}]</span> {{ thought.text }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Public Game Logs -->
+            <div class="glass-card p-4 rounded-xl border border-slate-800 flex flex-col h-80 flex-grow">
+                <div class="text-xs font-bold text-slate-300 mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-scroll text-slate-400"></i> 對局即時動態與對話紀錄
+                </div>
+                <div class="flex-grow overflow-y-auto bg-slate-950/90 p-3 rounded-lg border border-slate-900 text-xs space-y-2.5" ref="logBox">
+                    <div v-for="(log, idx) in gameLogs" :key="idx" class="leading-relaxed" :class="getLogColor(log.type)">
+                        <span class="text-[10px] font-mono text-slate-500 mr-1">[{{ log.time }}]</span>
+                        <span class="font-bold mr-1" v-if="log.speaker">{{ log.speaker }}:</span>
+                        <span>{{ log.text }}</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+// Detect execution environment (Firestore vs PeerJS WebRTC P2P)
+const isFirebaseEnv = typeof __firebase_config !== 'undefined' && __firebase_config.length > 20;
+
+let auth = null;
+let db = null;
+let appId = 'werewolf-multiplayer-app';
+
+if (isFirebaseEnv) {
+    try {
+        appId = typeof __app_id !== 'undefined' ? __app_id : 'werewolf-multiplayer-app';
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+            await signInAnonymously(auth);
+        }
+    } catch (e) {
+        console.warn("Firebase Auth fallback:", e);
+    }
+}
+
+const currentUid = auth?.currentUser?.uid || 'user-' + Math.random().toString(36).substring(2, 9);
+
+// PeerJS state for P2P WebRTC fallback mode
+let peerInstance = null;
+const peerConns = {};
+
+const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
+
+createApp({
+    setup() {
+        const apiKey = ref(localStorage.getItem('gemini_api_key') || '');
+        const apiKeyInput = ref(apiKey.value);
+        const aiModel = ref(localStorage.getItem('gemini_ai_model') || 'gemini-3.1-flash-lite');
+        const aiModelInput = ref(aiModel.value);
+        const showApiModal = ref(false);
+        const toastMessage = ref('');
+        const isConnecting = ref(false);
+
+        const playerNameInput = ref(localStorage.getItem('werewolf_player_name') || '');
+        const joinCodeInput = ref('');
+        
+        const roomId = ref(null);
+        const roomCode = ref('');
+        const roomData = ref(null);
+        const unsubscribeRoom = ref(null);
+
+        const isWritingSpeech = ref(false);
+        const humanSpeechText = ref('');
+        const selectableTargets = ref([]);
+        const activeTargetCallback = ref(null);
+        const isAiThinking = ref(false);
+
+        const thoughtBox = ref(null);
+        const logBox = ref(null);
+
+        const networkModeText = computed(() => isFirebaseEnv ? 'Firestore 雲端' : 'P2P 免伺服器直連');
+
+        const gameState = computed(() => roomData.value?.gameState || 'LOBBY');
+        const isNight = computed(() => gameState.value.startsWith('NIGHT'));
+        const roomPlayers = computed(() => roomData.value?.players || []);
+        
+        const myPlayer = computed(() => roomPlayers.value.find(p => p.uid === currentUid));
+        const mySeat = computed(() => myPlayer.value?.id || null);
+        const myRole = computed(() => myPlayer.value?.role || '');
+        const isHost = computed(() => roomData.value?.hostUid === currentUid);
+
+        const killedTargetId = computed(() => roomData.value?.nightData?.wolfKillTarget || null);
+
+        const currentPhaseTitle = computed(() => {
+            switch (gameState.value) {
+                case 'LOBBY': return '大廳等待中';
+                case 'NIGHT_WOLF': return '黑夜 - 狼人請睜眼襲擊';
+                case 'NIGHT_SEER': return '黑夜 - 預言家查驗身份';
+                case 'NIGHT_WITCH': return '黑夜 - 女巫使用藥劑';
+                case 'DAY_ANNOUNCE': return '太陽升起 - 昨夜公佈';
+                case 'DAY_SPEAK': return '自由發言討論';
+                case 'DAY_VOTE': return '公決放逐投票';
+                case 'GAME_OVER': return '對局結束';
+                default: return '';
+            }
+        });
+
+        const phaseStatusText = computed(() => {
+            if (isNight.value) return '黑夜階段';
+            if (gameState.value.startsWith('DAY')) return '白天階段';
+            return '準備中';
+        });
+
+        const userInstructionText = computed(() => {
+            if (gameState.value === 'LOBBY') return '邀請朋友輸入房號，或點擊「AI 補滿 6 人」即可開始。';
+            if (gameState.value === 'NIGHT_WOLF') {
+                return myRole.value === 'werewolf' && myPlayer.value?.isAlive
+                    ? '請點擊選定今晚要襲擊的好人目標。' 
+                    : '黑夜降臨，狼人正在密謀襲擊...';
+            }
+            if (gameState.value === 'NIGHT_SEER') {
+                return myRole.value === 'seer' && myPlayer.value?.isAlive
+                    ? '請點擊卡片選擇一位玩家查驗其陣營。' 
+                    : '預言家正在查驗水晶球...';
+            }
+            if (gameState.value === 'NIGHT_WITCH') {
+                if (myRole.value === 'witch' && myPlayer.value?.isAlive) {
+                    const saveUsed = roomData.value?.nightData?.witchSaveUsed;
+                    if (killedTargetId.value && !saveUsed) {
+                        return `今晚倒牌的玩家是 ${killedTargetId.value} 號！可點擊右側按鈕或卡片救人，或點擊「不使用藥劑」。`;
+                    } else if (saveUsed) {
+                        return `今晚倒牌玩家是 ${killedTargetId.value || '無'} 號。你的解藥已使用過，請點擊「不使用藥劑」。`;
+                    } else {
+                        return `今晚是平安夜，無人倒牌。請點擊「不使用藥劑」。`;
+                    }
+                }
+                return '女巫正在考慮調配藥劑...';
+            }
+            if (gameState.value === 'DAY_SPEAK') {
+                const currentSpeaker = roomPlayers.value.find(p => p.id === roomData.value?.currentSpeakerSeat);
+                if (currentSpeaker?.uid === currentUid) return '輪到你發言了！請點擊右側「發表發言」。';
+                return `玩家 ${currentSpeaker ? currentSpeaker.id + '號 (' + currentSpeaker.name + ')' : ''} 發言中...`;
+            }
+            if (gameState.value === 'DAY_VOTE') return '請點擊選定一位你懷疑的狼人進行放逐投票。';
+            if (gameState.value === 'GAME_OVER') return '遊戲結束，感謝對局！';
+            return '';
+        });
+
+        const canSpeakNow = computed(() => gameState.value === 'DAY_SPEAK' && roomData.value?.currentSpeakerSeat === mySeat.value && myPlayer.value?.isAlive && !isWritingSpeech.value);
+        const canUseWitchHeal = computed(() => {
+            if (gameState.value !== 'NIGHT_WITCH') return false;
+            if (myRole.value !== 'witch' || !myPlayer.value?.isAlive) return false;
+            const witchSaveUsed = roomData.value?.nightData?.witchSaveUsed;
+            return !!killedTargetId.value && !witchSaveUsed;
+        });
+        const canSkipWitch = computed(() => gameState.value === 'NIGHT_WITCH' && myRole.value === 'witch' && myPlayer.value?.isAlive);
+
+        const aiThoughts = computed(() => roomData.value?.thoughts || []);
+        const gameLogs = computed(() => roomData.value?.logs || []);
+
+        const showToast = (msg) => {
+            toastMessage.value = msg;
+            setTimeout(() => toastMessage.value = '', 3500);
+        };
+
+        const copyRoomCode = () => {
+            const dummy = document.createElement('input');
+            document.body.appendChild(dummy);
+            dummy.value = roomCode.value;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+            showToast('房號已成功複製到剪貼簿！');
+        };
+
+        const getCurrentTime = () => {
+            const now = new Date();
+            return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        };
+
+        // Deep-merge state updater supporting dot-notation keys for nested updates
+        const updateRoomState = async (updates) => {
+            if (isFirebaseEnv && db) {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId.value);
+                await updateDoc(roomRef, updates);
+            } else {
+                const newRoom = JSON.parse(JSON.stringify(roomData.value || {}));
+                for (const key in updates) {
+                    if (key.includes('.')) {
+                        const parts = key.split('.');
+                        let curr = newRoom;
+                        for (let i = 0; i < parts.length - 1; i++) {
+                            if (!curr[parts[i]]) curr[parts[i]] = {};
+                            curr = curr[parts[i]];
+                        }
+                        curr[parts[parts.length - 1]] = updates[key];
+                    } else {
+                        newRoom[key] = updates[key];
+                    }
+                }
+                roomData.value = newRoom;
+                if (isHost.value) {
+                    broadcastPeerState();
+                }
+            }
+        };
+
+        const broadcastPeerState = () => {
+            const payload = { type: 'STATE_SYNC', roomData: roomData.value };
+            Object.values(peerConns).forEach(conn => {
+                if (conn && conn.open) conn.send(payload);
+            });
+        };
+
+        const createRoom = async () => {
+            if (!playerNameInput.value.trim()) return;
+            localStorage.setItem('werewolf_player_name', playerNameInput.value.trim());
+
+            isConnecting.value = true;
+            const code = Math.floor(1000 + Math.random() * 9000).toString();
+            const newRoomId = 'room_' + code;
+
+            const initialRoom = {
+                code,
+                hostUid: currentUid,
+                gameState: 'LOBBY',
+                dayCount: 1,
+                currentSpeakerSeat: null,
+                players: [{
+                    id: 1,
+                    uid: currentUid,
+                    name: playerNameInput.value.trim(),
+                    isAi: false,
+                    role: '',
+                    isAlive: true,
+                    lastSpeech: '',
+                    votedFor: null
+                }],
+                nightData: { wolfKillTarget: null, seerCheckTarget: null, witchSaveUsed: false, witchSavedTarget: null },
+                thoughts: [],
+                logs: [{ time: getCurrentTime(), text: `房間建立成功！房號為 ${code}，邀請朋友輸入房號加入！`, type: 'system' }]
+            };
+
+            if (isFirebaseEnv && db) {
+                try {
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', newRoomId);
+                    await setDoc(roomRef, initialRoom);
+                    roomId.value = newRoomId;
+                    roomCode.value = code;
+                    subscribeToFirebaseRoom(newRoomId);
+                } catch (e) {
+                    showToast('雲端開房失敗：' + e.message);
+                } finally {
+                    isConnecting.value = false;
+                }
+            } else {
+                try {
+                    if (typeof Peer === 'undefined') throw new Error('PeerJS 網路套件載入中，請稍後重試');
+                    peerInstance = new Peer('ww-room-' + code);
+                    
+                    peerInstance.on('open', () => {
+                        roomData.value = initialRoom;
+                        roomId.value = newRoomId;
+                        roomCode.value = code;
+                        isConnecting.value = false;
+                        showToast(`房間建立成功！房號為 ${code}`);
+
+                        peerInstance.on('connection', (conn) => {
+                            conn.on('open', () => {
+                                peerConns[conn.peer] = conn;
+                                conn.send({ type: 'STATE_SYNC', roomData: roomData.value });
+                            });
+                            conn.on('data', (data) => handleHostPeerMessage(data, conn));
+                            conn.on('close', () => delete peerConns[conn.peer]);
+                        });
+                    });
+
+                    peerInstance.on('error', (err) => {
+                        isConnecting.value = false;
+                        showToast('開房失敗 (房號佔用或網路異常)，請重試一次');
+                    });
+                } catch (err) {
+                    isConnecting.value = false;
+                    showToast(err.message);
+                }
+            }
+        };
+
+        const joinRoom = async () => {
+            const code = joinCodeInput.value.trim();
+            if (!code || !playerNameInput.value.trim()) return;
+            localStorage.setItem('werewolf_player_name', playerNameInput.value.trim());
+
+            isConnecting.value = true;
+            const targetRoomId = 'room_' + code;
+
+            if (isFirebaseEnv && db) {
+                try {
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', targetRoomId);
+                    const snap = await getDoc(roomRef);
+                    if (!snap.exists()) {
+                        showToast('找不到此房號，請確認後重試！');
+                        isConnecting.value = false;
+                        return;
+                    }
+
+                    const data = snap.data();
+                    if (data.gameState !== 'LOBBY') {
+                        showToast('該房間遊戲已在進行中，無法加入！');
+                        isConnecting.value = false;
+                        return;
+                    }
+
+                    const existingPlayers = data.players || [];
+                    if (existingPlayers.length >= 6) {
+                        showToast('房間人數已滿 (6人)！');
+                        isConnecting.value = false;
+                        return;
+                    }
+
+                    if (!existingPlayers.some(p => p.uid === currentUid)) {
+                        existingPlayers.push({
+                            id: existingPlayers.length + 1,
+                            uid: currentUid,
+                            name: playerNameInput.value.trim(),
+                            isAi: false,
+                            role: '',
+                            isAlive: true,
+                            lastSpeech: '',
+                            votedFor: null
+                        });
+
+                        await updateDoc(roomRef, {
+                            players: existingPlayers,
+                            logs: [...data.logs, { time: getCurrentTime(), text: `${playerNameInput.value.trim()} 加入了房間！`, type: 'system' }]
+                        });
+                    }
+
+                    roomId.value = targetRoomId;
+                    roomCode.value = code;
+                    subscribeToFirebaseRoom(targetRoomId);
+                } catch (e) {
+                    showToast('加入房間失敗：' + e.message);
+                } finally {
+                    isConnecting.value = false;
+                }
+            } else {
+                try {
+                    if (typeof Peer === 'undefined') throw new Error('PeerJS 網路套件載入中');
+                    peerInstance = new Peer(null);
+
+                    peerInstance.on('open', () => {
+                        const conn = peerInstance.connect('ww-room-' + code);
+                        let connected = false;
+
+                        conn.on('open', () => {
+                            connected = true;
+                            peerConns['host'] = conn;
+                            conn.send({
+                                type: 'GUEST_JOIN',
+                                player: {
+                                    uid: currentUid,
+                                    name: playerNameInput.value.trim(),
+                                    isAi: false,
+                                    role: '',
+                                    isAlive: true,
+                                    lastSpeech: '',
+                                    votedFor: null
+                                }
+                            });
+                            roomId.value = targetRoomId;
+                            roomCode.value = code;
+                            isConnecting.value = false;
+                            showToast('成功加入房間！');
+                        });
+
+                        conn.on('data', (data) => {
+                            if (data.type === 'STATE_SYNC') {
+                                roomData.value = data.roomData;
+                            }
+                        });
+
+                        setTimeout(() => {
+                            if (!connected) {
+                                isConnecting.value = false;
+                                showToast('無法連線至該房號，請確認房號或房主仍在線上！');
+                            }
+                        }, 6000);
+                    });
+
+                    peerInstance.on('error', (err) => {
+                        isConnecting.value = false;
+                        showToast('加入失敗，請重試！');
+                    });
+                } catch (err) {
+                    isConnecting.value = false;
+                    showToast(err.message);
+                }
+            }
+        };
+
+        const handleHostPeerMessage = (data, conn) => {
+            if (!isHost.value || !roomData.value) return;
+
+            if (data.type === 'GUEST_JOIN') {
+                const existing = [...roomData.value.players];
+                if (existing.length < 6 && roomData.value.gameState === 'LOBBY') {
+                    if (!existing.some(p => p.uid === data.player.uid)) {
+                        data.player.id = existing.length + 1;
+                        existing.push(data.player);
+                        updateRoomState({
+                            players: existing,
+                            logs: [...roomData.value.logs, { time: getCurrentTime(), text: `${data.player.name} 加入了房間！`, type: 'system' }]
+                        });
+                    }
+                }
+            } else if (data.type === 'GUEST_ACTION') {
+                if (data.actionType === 'SPEECH') {
+                    handleGuestSpeechSubmission(data.seat, data.text);
+                } else if (data.actionType === 'ACTION_TARGET') {
+                    handleGuestTargetAction(data.stage, data.seat, data.targetId, data);
+                }
+            }
+        };
+
+        const leaveRoom = () => {
+            if (unsubscribeRoom.value) unsubscribeRoom.value();
+            if (peerInstance) peerInstance.destroy();
+            roomId.value = null;
+            roomCode.value = '';
+            roomData.value = null;
+        };
+
+        const subscribeToFirebaseRoom = (rId) => {
+            if (unsubscribeRoom.value) unsubscribeRoom.value();
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', rId);
+            unsubscribeRoom.value = onSnapshot(roomRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    roomData.value = snapshot.data();
+                    handleHostAiAutomation();
+                }
+            }, (err) => console.error("Room sync error:", err));
+        };
+
+        // ============================================================
+        //  AI 核心：Gemini 2.5 Flash 驅動的狼人殺 NPC
+        //  - 每個 AI 擁有完整公開紀錄 + 專屬私密資訊（狼隊友 / 查驗結果 / 藥劑狀態）
+        //  - 跨天記憶（aiMemory）：自己的推理筆記會帶入下一輪
+        //  - 夜間行動（狼刀 / 預言家查驗 / 女巫救人）與白天投票全部由模型決策
+        // ============================================================
+        const AI_PERSONAS = {
+            '艾莉絲': '冷靜的分析派，喜歡用邏輯鏈說服人，語氣理性但不失鋒利',
+            '鮑勃': '直率暴躁，愛直接點名質疑，語氣強硬、句子短',
+            '查理': '幽默圓滑，會用反問和玩笑帶節奏，常用「欸」「啊」開頭',
+            '戴安娜': '謹慎細膩，特別關注發言矛盾與投票細節，喜歡回顧誰說過什麼',
+            '伊森': '自信激進，敢帶頭抗推、敢下結論，愛說「我直接說」',
+            '費歐娜': '溫和但敏銳，善於歸納全場資訊，說話有條理'
+        };
+        const ROLE_SETUP = '本局 6 人：2 狼人、1 預言家、1 女巫、2 平民。狼人每晚共同擊殺一人；預言家每晚查驗一人是狼或好人；女巫有一瓶解藥（整局只能用一次）可救當晚被殺者。白天從 1 號起輪流發言，之後全體投票，最高票者出局。狼人數 ≥ 好人數則狼人勝；狼人全部出局則好人勝。';
+        const ROLE_STRATEGY = {
+            werewolf: `【狼人策略】目標：隱藏身份、帶偏投票、把神職或好人送出局。
+- 絕不投票或指控你的狼隊友，但也不要刻意護他，避免被看出綁定。
+- 第一天可選擇「悍跳預言家」：假報查驗結果，給隊友發金水、給真預言家發查殺；或選擇當「深水狼」，安靜跟票、附和多數。
+- 若真預言家已跳出並報了你或隊友是狼，必須立刻反擊：質疑他是狼人假跳，找他發言邏輯漏洞，拉攏其他好人。
+- 夜間擊殺優先順序：已跳出的真預言家 > 女巫 > 邏輯最好、最會帶票的好人。不要殺看起來會被好人自己投出去的人。`,
+            seer: `【預言家策略】你是好人陣營唯一的資訊來源。
+- 通常第一天就要公開跳預言家並報出查驗結果（查殺＝狼，金水＝好人），讓好人跟著你投票。
+- 若有人跟你對跳預言家，他百分之百是狼，直接指出並帶隊投他。
+- 若你查到狼，要堅決帶票放逐他；若查到好人，替他背書並要求他跟你站隊。
+- 夜間查驗優先：跟你對跳的人、發言最可疑的人、跳女巫的人；不要重複查已知的人。`,
+            witch: `【女巫策略】你掌握「昨晚誰被狼刀」的隱藏資訊。
+- 被狼刀的人一定是好人；替他發過查殺的人很可能是狼，替他發金水的人可信度高。用這條線索判斷真假預言家。
+- 不必急著跳身份。若局勢混亂或有人假跳女巫時再跳出說明救人資訊。
+- 解藥只有一瓶：第一夜若刀口是明顯的神職（例如剛跳預言家的人）就該救；否則可考慮留著。`,
+            villager: `【平民策略】你沒有任何特殊資訊，全靠邏輯與觀察。
+- 盯緊：誰跳預言家、誰的說法前後矛盾、誰在護誰、誰的投票很反常、誰只會說空話不表態。
+- 昨夜被刀的人幾乎必是好人，對他發查殺的人很可疑。
+- 敢站隊：明確說你相信哪個預言家、打算投誰、理由是什麼；不要打模糊仗。`
+        };
+        const SPEECH_FALLBACKS = [
+            (me) => `我是 ${me.id} 號，先聽一下大家的發言，目前還沒有明確的懷疑對象，後面有人跳身份我再表態。`,
+            (me) => `${me.id} 號，我先過。有人要跳預言家的話請報查驗，我會跟著資訊走。`,
+            (me) => `我是 ${me.id} 號，這局資訊還很少，我暫時不亂踩人，等後面有人報查驗再說。`
+        ];
+
+        const aiTaskLock = new Set();
+        let lastApiCallAt = 0;
+        let aiKeyWarned = false;
+        const withLock = (key, fn) => {
+            if (aiTaskLock.has(key)) return;
+            aiTaskLock.add(key);
+            fn().catch(e => { console.error('AI task error:', e); aiTaskLock.delete(key); });
+        };
+
+        const extractJson = (text) => {
+            if (!text) return null;
+            let t = text.trim();
+            if (t.startsWith('```')) t = t.replace(/^```(json)?/i, '').replace(/```$/, '').trim();
+            try { return JSON.parse(t); } catch (_) {}
+            const s = t.indexOf('{'), e = t.lastIndexOf('}');
+            if (s >= 0 && e > s) { try { return JSON.parse(t.slice(s, e + 1)); } catch (_) {} }
+            return null;
+        };
+
+        const callGemini = async (systemInstruction, userPrompt, { retries = 2 } = {}) => {
+            if (!apiKey.value) {
+                if (!aiKeyWarned) { aiKeyWarned = true; showToast('⚠ 未設定 Gemini API Key，AI 將改用隨機決策'); }
+                return null;
+            }
+            isAiThinking.value = true;
+            let lastErr = '';
+            try {
+                // 節流：免費層 RPM 有限（Flash-Lite 約 15 RPM），確保兩次呼叫至少間隔 4.5 秒
+                const wait = lastApiCallAt + 4500 - Date.now();
+                if (wait > 0) await new Promise(r => setTimeout(r, wait));
+                for (let attempt = 0; attempt <= retries; attempt++) {
+                    lastApiCallAt = Date.now();
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 45000);
+                    try {
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiModel.value}:generateContent?key=${apiKey.value}`;
+                        const payload = {
+                            systemInstruction: { parts: [{ text: systemInstruction }] },
+                            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                            generationConfig: {
+                                responseMimeType: 'application/json'
+                            }
+                        };
+                        const resp = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                            signal: controller.signal
+                        });
+                        clearTimeout(timer);
+                        if (!resp.ok) {
+                            let msg = `HTTP ${resp.status}`;
+                            try { const ej = await resp.json(); msg += ' ' + (ej.error?.message || ''); } catch (_) {}
+                            lastErr = msg;
+                            if (resp.status === 429 || resp.status >= 500) {
+                                // 429 多半是撞到每分鐘上限，退避久一點再試
+                                await new Promise(r => setTimeout(r, resp.status === 429 ? 12000 : 3000 * (attempt + 1)));
+                                continue;
+                            }
+                            break;
+                        }
+                        const json = await resp.json();
+                        const text = (json.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+                        const parsed = extractJson(text);
+                        if (parsed) return parsed;
+                        lastErr = '回傳非 JSON: ' + text.slice(0, 80);
+                    } catch (e) {
+                        clearTimeout(timer);
+                        lastErr = e.name === 'AbortError' ? '請求逾時' : (e.message || String(e));
+                    }
+                }
+            } finally {
+                isAiThinking.value = false;
+            }
+            console.warn('Gemini API failed:', lastErr);
+            showToast(`⚠ Gemini 呼叫失敗：${lastErr.slice(0, 70)}`);
+            return null;
+        };
+
+        // ---------- 上下文建構 ----------
+        const seatLabelByName = (data, name) => {
+            const p = data.players.find(x => x.name === name);
+            return p ? `${p.id}號(${p.name})` : name;
+        };
+
+        const buildPublicContext = (data) => {
+            const alive = data.players.filter(p => p.isAlive);
+            const dead = data.players.filter(p => !p.isAlive);
+            const transcript = data.logs
+                .filter(l => !l.text.startsWith('房間建立'))
+                .slice(-50)
+                .map(l => l.type === 'speech' ? `${seatLabelByName(data, l.speaker)}：${l.text}` : `[公告] ${l.text}`)
+                .join('\n');
+            return `【局勢】目前是第 ${data.dayCount} 天
+存活：${alive.map(p => `${p.id}號${p.name}`).join('、')}
+已出局：${dead.length ? dead.map(p => `${p.id}號${p.name}`).join('、') : '無'}
+
+【完整公開紀錄（依時間順序：發言、公告、投票結果）】
+${transcript || '（尚無紀錄）'}`;
+        };
+
+        const getMem = (data, seat) => ((data.aiMemory || {})[seat]) || { notes: [], seerResults: [], kills: [], saved: null };
+
+        const buildPrivateContext = (data, me) => {
+            const mem = getMem(data, me.id);
+            const lines = [`你是 ${me.id} 號玩家「${me.name}」，真實身份：【${getRoleName(me.role)}】。`];
+            if (me.role === 'werewolf') {
+                const mates = data.players.filter(p => p.role === 'werewolf' && p.id !== me.id);
+                lines.push(`你的狼隊友：${mates.map(p => `${p.id}號${p.name}${p.isAlive ? '' : '(已出局)'}`).join('、') || '無'}。除了狼隊友之外，所有其他玩家都是好人陣營。`);
+                if (mem.kills?.length) lines.push(`狼隊歷夜擊殺目標：${mem.kills.join('、')}。`);
+            }
+            if (me.role === 'seer') {
+                lines.push(mem.seerResults?.length
+                    ? `你的真實查驗結果：${mem.seerResults.map(r => `第${r.night}夜查 ${r.target}號 → ${r.isWolf ? '狼人' : '好人'}`).join('；')}。`
+                    : '你尚未有任何查驗結果。');
+            }
+            if (me.role === 'witch') {
+                lines.push(`解藥狀態：${data.nightData?.witchSaveUsed ? '已用掉' : '尚未使用'}。${mem.saved ? `你曾在夜裡救了 ${mem.saved} 號。` : ''}`);
+                if (mem.kills?.length) lines.push(`你知道的狼刀紀錄（被刀者必是好人）：${mem.kills.join('、')}。`);
+            }
+            if (mem.notes?.length) lines.push(`你先前的私密推理筆記（保持前後一致）：\n${mem.notes.slice(-4).map(n => '- ' + n).join('\n')}`);
+            lines.push(`你的說話性格：${AI_PERSONAS[me.name.replace(' (AI)', '')] || '理性穩重'}。`);
+            return lines.join('\n');
+        };
+
+        const buildSystemPrompt = (data, me, taskInstruction) =>
+            `你是一位狼人殺高手，正在玩繁體中文狼人殺遊戲。${ROLE_SETUP}
+
+${buildPrivateContext(data, me)}
+
+${ROLE_STRATEGY[me.role] || ''}
+
+${taskInstruction}
+所有輸出使用繁體中文，只輸出 JSON，不要加任何多餘文字。`;
+
+        const updateMem = (data, seat, patch) => {
+            const all = JSON.parse(JSON.stringify(data.aiMemory || {}));
+            const m = all[seat] || { notes: [], seerResults: [], kills: [], saved: null };
+            Object.assign(m, typeof patch === 'function' ? patch(m) : patch);
+            all[seat] = m;
+            return all;
+        };
+        const addNote = (m, text) => ({ notes: [...(m.notes || []), text.slice(0, 220)].slice(-8) });
+
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+        const validTarget = (id, allowed) => Number.isInteger(id) && allowed.includes(id);
+
+        // ---------- 夜間：狼人擊殺 ----------
+        const aiWolfKill = async (data) => {
+            const wolves = data.players.filter(p => p.isAlive && p.role === 'werewolf');
+            const wolfAi = wolves.find(p => p.isAi) || wolves[0];
+            const goodTargets = data.players.filter(p => p.isAlive && p.role !== 'werewolf');
+            const allowed = goodTargets.map(p => p.id);
+
+            let targetId = null, thoughtText = '';
+            if (wolfAi) {
+                const sys = buildSystemPrompt(data, wolfAi, `【現在是夜晚】請替狼隊決定今晚擊殺目標。可選目標：${goodTargets.map(t => `${t.id}號${t.name}`).join('、')}。
+輸出 JSON：{"thought":"擊殺理由與明天白天的策略規劃","target":座號數字}`);
+                const res = await callGemini(sys, buildPublicContext(data) + '\n\n請決定今晚擊殺誰。');
+                if (res && validTarget(Number(res.target), allowed)) { targetId = Number(res.target); thoughtText = res.thought || ''; }
+            }
+            if (!targetId) {
+                targetId = pick(allowed);
+                thoughtText = `（隨機決策）今晚選擇襲擊 ${targetId} 號。`;
+            }
+
+            let aiMemory = data.aiMemory || {};
+            wolves.forEach(w => { aiMemory = updateMem({ ...data, aiMemory }, w.id, m => ({ kills: [...(m.kills || []), `第${data.dayCount}夜刀${targetId}號`] })); });
+            if (wolfAi) aiMemory = updateMem({ ...data, aiMemory }, wolfAi.id, m => addNote(m, `第${data.dayCount}夜：刀${targetId}號。${thoughtText}`));
+
+            await new Promise(r => setTimeout(r, 1200));
+            await updateRoomState({
+                'nightData.wolfKillTarget': targetId,
+                aiMemory,
+                thoughts: [...(data.thoughts || []), { speaker: `🐺 ${wolfAi?.name || '狼人'}（夜間擊殺 → ${targetId}號）`, text: thoughtText }],
+                gameState: 'NIGHT_SEER',
+                logs: [...data.logs, { time: getCurrentTime(), text: '狼人已完成夜間襲擊，預言家請睜眼查驗。', type: 'system' }]
+            });
+        };
+
+        // ---------- 夜間：預言家查驗 ----------
+        const aiSeerCheck = async (data, seer) => {
+            const mem = getMem(data, seer.id);
+            const checked = (mem.seerResults || []).map(r => r.target);
+            const candidates = data.players.filter(p => p.isAlive && p.id !== seer.id && !checked.includes(p.id));
+            const allowed = candidates.map(p => p.id);
+
+            let targetId = null, thoughtText = '';
+            if (allowed.length) {
+                const sys = buildSystemPrompt(data, seer, `【現在是夜晚】請選擇今晚要查驗的對象。可選：${candidates.map(t => `${t.id}號${t.name}`).join('、')}。
+輸出 JSON：{"thought":"查驗理由","target":座號數字}`);
+                const res = await callGemini(sys, buildPublicContext(data) + '\n\n請決定今晚查驗誰。');
+                if (res && validTarget(Number(res.target), allowed)) { targetId = Number(res.target); thoughtText = res.thought || ''; }
+                if (!targetId) { targetId = pick(allowed); thoughtText = `（隨機決策）查驗 ${targetId} 號。`; }
+            }
+
+            let aiMemory = data.aiMemory || {};
+            let resultText = '無可查驗對象';
+            if (targetId) {
+                const isWolf = data.players.find(p => p.id === targetId)?.role === 'werewolf';
+                resultText = `${targetId}號 → ${isWolf ? '狼人' : '好人'}`;
+                aiMemory = updateMem(data, seer.id, m => ({
+                    seerResults: [...(m.seerResults || []), { night: data.dayCount, target: targetId, isWolf }],
+                    ...addNote(m, `第${data.dayCount}夜查驗 ${resultText}。${thoughtText}`)
+                }));
+            }
+
+            await new Promise(r => setTimeout(r, 1200));
+            await updateRoomState({
+                'nightData.seerCheckTarget': targetId,
+                aiMemory,
+                thoughts: [...(data.thoughts || []), { speaker: `🔮 ${seer.name}（查驗結果：${resultText}）`, text: thoughtText }],
+                gameState: 'NIGHT_WITCH',
+                logs: [...data.logs, { time: getCurrentTime(), text: '預言家已完成查驗，女巫請睜眼。', type: 'system' }]
+            });
+        };
+
+        // ---------- 夜間：女巫救人 ----------
+        const aiWitchAct = async (data, witch) => {
+            const killedId = data.nightData?.wolfKillTarget;
+            const canSave = !!killedId && !data.nightData?.witchSaveUsed;
+            let save = false, thoughtText = '';
+
+            if (canSave) {
+                const victim = data.players.find(p => p.id === killedId);
+                const sys = buildSystemPrompt(data, witch, `【現在是夜晚】今晚狼人擊殺了 ${killedId}號${victim?.name}${killedId === witch.id ? '（就是你自己）' : ''}。你的解藥尚未使用，是否要用解藥救他？
+輸出 JSON：{"thought":"判斷理由","save":true或false}`);
+                const res = await callGemini(sys, buildPublicContext(data) + '\n\n請決定是否使用解藥。');
+                if (res && typeof res.save === 'boolean') { save = res.save; thoughtText = res.thought || ''; }
+                else { save = data.dayCount === 1; thoughtText = `（隨機決策）${save ? '使用' : '保留'}解藥。`; }
+            } else {
+                thoughtText = killedId ? `解藥已用完，只能眼看 ${killedId} 號倒牌。` : '平安夜，無需用藥。';
+            }
+
+            let aiMemory = data.aiMemory || {};
+            if (killedId) {
+                aiMemory = updateMem(data, witch.id, m => ({
+                    kills: [...(m.kills || []), `第${data.dayCount}夜 ${killedId}號被刀${save ? '（已救）' : ''}`],
+                    ...(save ? { saved: killedId } : {}),
+                    ...addNote(m, `第${data.dayCount}夜：${killedId}號被刀，${save ? '用解藥救了他' : '未救'}。${thoughtText}`)
+                }));
+            }
+
+            await new Promise(r => setTimeout(r, 1200));
+            await updateRoomState({
+                aiMemory,
+                thoughts: [...(data.thoughts || []), { speaker: `🧪 ${witch.name}（${canSave ? (save ? '使用解藥救 ' + killedId + '號' : '保留解藥') : '無行動'}）`, text: thoughtText }]
+            });
+            await handleWitchActionHost(save ? killedId : null, save);
+        };
+
+        // ---------- 白天：發言 ----------
+        const aiSpeak = async (data, me) => {
+            const sys = buildSystemPrompt(data, me, `【現在是白天發言階段】輪到你發言。發言要求：
+1. 必須具體回應前面幾號的發言（點名座號、引用他說了什麼），指出矛盾或表達支持；若你是第一個發言者，就主動定調。
+2. 明確表態：你目前最懷疑誰、打算投誰、為什麼。
+3. 若身份需要（預言家）或策略需要（狼人悍跳），可以在發言中「聲稱」身份與查驗結果；聲稱內容不必是真的，但必須與你之前的公開說法一致。
+4. 80～160 字，口語化，像真人在牌桌上講話；不要條列、不要說自己是 AI。
+5. 除非你決定公開跳身份，否則絕不洩漏系統告訴你的真實底牌與隊友。
+輸出 JSON：{"thought":"私密推理與策略（可較長）","speech":"公開發言全文","suspect":最懷疑的座號數字}`);
+            const res = await callGemini(sys, buildPublicContext(data) + `\n\n現在輪到你（${me.id} 號）發言。`);
+
+            const speechText = (res?.speech && String(res.speech).trim()) || pick(SPEECH_FALLBACKS)(me);
+            const thoughtText = res?.thought || '（API 無回應，使用預設發言）';
+            const aiMemory = updateMem(data, me.id, m => addNote(m, `第${data.dayCount}天發言：懷疑${res?.suspect ?? '?'}號。${thoughtText}`));
+
+            const updatedPlayers = data.players.map(p => p.id === me.id ? { ...p, lastSpeech: speechText } : p);
+            const updatedThoughts = [...(data.thoughts || []), { speaker: `💬 ${me.name}（第${data.dayCount}天發言）`, text: thoughtText }];
+            const updatedLogs = [...data.logs, { time: getCurrentTime(), text: speechText, type: 'speech', speaker: me.name }];
+
+            const aliveSeats = data.players.filter(p => p.isAlive).map(p => p.id);
+            const idx = aliveSeats.indexOf(me.id);
+            const nextSeat = idx < aliveSeats.length - 1 ? aliveSeats[idx + 1] : null;
+
+            await new Promise(r => setTimeout(r, 1000));
+            if (nextSeat) {
+                await updateRoomState({ players: updatedPlayers, thoughts: updatedThoughts, logs: updatedLogs, aiMemory, currentSpeakerSeat: nextSeat });
+            } else {
+                await updateRoomState({
+                    players: updatedPlayers, thoughts: updatedThoughts, aiMemory,
+                    logs: [...updatedLogs, { time: getCurrentTime(), text: '所有玩家發言完畢，進入公決投票階段！', type: 'system' }],
+                    gameState: 'DAY_VOTE'
+                });
+            }
+        };
+
+        // ---------- 白天：投票 ----------
+        const aiVoteAll = async (data) => {
+            const voters = data.players.filter(p => p.isAi && p.isAlive && p.votedFor === null);
+            const aiVotes = {};
+            let thoughts = [...(data.thoughts || [])];
+            let aiMemory = data.aiMemory || {};
+
+            for (const me of voters) {
+                let allowed = data.players.filter(p => p.isAlive && p.id !== me.id);
+                if (me.role === 'werewolf') allowed = allowed.filter(p => p.role !== 'werewolf');
+                const allowedIds = allowed.map(p => p.id);
+
+                const sys = buildSystemPrompt({ ...data, aiMemory }, me, `【現在是投票階段】所有人已發言完畢，請決定你要投票放逐誰。可投：${allowed.map(t => `${t.id}號${t.name}`).join('、')}。
+記得投票是公開的，投票要與你白天的發言立場一致（除非有充分理由改變）。
+輸出 JSON：{"thought":"投票理由","target":座號數字}`);
+                const res = await callGemini(sys, buildPublicContext(data) + `\n\n請決定你（${me.id} 號）投給誰。`);
+
+                let target = null, thought = '';
+                if (res && validTarget(Number(res.target), allowedIds)) { target = Number(res.target); thought = res.thought || ''; }
+                else { target = pick(allowedIds); thought = `（隨機決策）投給 ${target} 號。`; }
+
+                aiVotes[me.id] = target;
+                thoughts.push({ speaker: `🗳️ ${me.name}（投票 → ${target}號）`, text: thought });
+                aiMemory = updateMem({ ...data, aiMemory }, me.id, m => addNote(m, `第${data.dayCount}天投票給${target}號。${thought}`));
+            }
+
+            // 以最新狀態合併（人類玩家可能已在此期間投票）
+            const latest = roomData.value;
+            const merged = latest.players.map(p => aiVotes[p.id] != null ? { ...p, votedFor: aiVotes[p.id] } : p);
+            await finalizeVotesIfComplete(latest, merged, { thoughts, aiMemory });
+        };
+
+        const finalizeVotesIfComplete = async (data, updatedPlayers, extra = {}) => {
+            const allVoted = updatedPlayers.filter(p => p.isAlive).every(p => p.votedFor !== null);
+            if (!allVoted) {
+                await updateRoomState({ players: updatedPlayers, ...extra });
+                return;
+            }
+
+            const voteCounts = {};
+            const breakdown = [];
+            updatedPlayers.filter(p => p.isAlive).forEach(p => {
+                voteCounts[p.votedFor] = (voteCounts[p.votedFor] || 0) + 1;
+                breakdown.push(`${p.id}號→${p.votedFor}號`);
+            });
+
+            let maxVote = 0, eliminatedId = null;
+            for (const [id, count] of Object.entries(voteCounts)) {
+                if (count > maxVote) { maxVote = count; eliminatedId = parseInt(id); }
+            }
+
+            const logs = [...data.logs, { time: getCurrentTime(), text: `投票明細：${breakdown.join('，')}`, type: 'system' }];
+            const finalPlayers = updatedPlayers.map(p => {
+                if (p.id === eliminatedId) {
+                    logs.push({ time: getCurrentTime(), text: `${p.id} 號 (${p.name}) 獲得最高票 (${maxVote}票)，被放逐出局！`, type: 'danger' });
+                    return { ...p, isAlive: false, votedFor: null };
+                }
+                return { ...p, votedFor: null };
+            });
+
+            const aliveWolves = finalPlayers.filter(p => p.isAlive && p.role === 'werewolf');
+            const aliveGood = finalPlayers.filter(p => p.isAlive && p.role !== 'werewolf');
+
+            if (aliveWolves.length === 0) {
+                logs.push({ time: getCurrentTime(), text: '🎉【好人陣營獲勝！】所有狼人已被清除！', type: 'system' });
+                await updateRoomState({ players: finalPlayers, logs, gameState: 'GAME_OVER', ...extra });
+            } else if (aliveWolves.length >= aliveGood.length) {
+                logs.push({ time: getCurrentTime(), text: '🐺【狼人陣營獲勝！】狼人攻佔了村莊！', type: 'danger' });
+                await updateRoomState({ players: finalPlayers, logs, gameState: 'GAME_OVER', ...extra });
+            } else {
+                logs.push({ time: getCurrentTime(), text: `--- 第 ${data.dayCount + 1} 夜：夜幕降臨，所有人請閉眼 ---`, type: 'system' });
+                await updateRoomState({
+                    players: finalPlayers,
+                    logs,
+                    dayCount: data.dayCount + 1,
+                    gameState: 'NIGHT_WOLF',
+                    // 解藥整局限用一次：跨夜保留 witchSaveUsed
+                    nightData: { wolfKillTarget: null, seerCheckTarget: null, witchSaveUsed: !!data.nightData?.witchSaveUsed, witchSavedTarget: null },
+                    ...extra
+                });
+            }
+        };
+
+        const startGameWithAiFill = async () => {
+            if (!isHost.value) return;
+
+            const currentList = [...roomData.value.players];
+            const aiNames = ['艾莉絲', '鮑勃', '查理', '戴安娜', '伊森', '費歐娜'];
+
+            while (currentList.length < 6) {
+                const seatId = currentList.length + 1;
+                currentList.push({
+                    id: seatId,
+                    uid: 'ai_' + seatId,
+                    name: aiNames[seatId - 1] + ' (AI)',
+                    isAi: true,
+                    role: '',
+                    isAlive: true,
+                    lastSpeech: '',
+                    votedFor: null
+                });
+            }
+
+            const roles = ['werewolf', 'werewolf', 'seer', 'witch', 'villager', 'villager'];
+            for (let i = roles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [roles[i], roles[j]] = [roles[j], roles[i]];
+            }
+
+            currentList.forEach((p, idx) => {
+                p.role = roles[idx];
+                p.isAlive = true;
+                p.lastSpeech = '';
+                p.votedFor = null;
+            });
+
+            aiTaskLock.clear();
+
+            const newLogs = [...roomData.value.logs,
+                { time: getCurrentTime(), text: '=== 對局開始！所有玩家底牌已私密發放 ===', type: 'system' },
+                { time: getCurrentTime(), text: '--- 第 1 夜：天黑請閉眼，狼人請睜眼襲擊 ---', type: 'system' }
+            ];
+
+            await updateRoomState({
+                players: currentList,
+                gameState: 'NIGHT_WOLF',
+                dayCount: 1,
+                logs: newLogs,
+                thoughts: [],
+                aiMemory: {},
+                nightData: { wolfKillTarget: null, seerCheckTarget: null, witchSaveUsed: false, witchSavedTarget: null }
+            });
+        };
+
+        // ---------- 主機端自動化排程 ----------
+        const handleHostAiAutomation = async () => {
+            if (!isHost.value || !roomData.value) return;
+            const data = roomData.value;
+            const day = data.dayCount;
+
+            if (data.gameState === 'NIGHT_WOLF') {
+                const wolves = data.players.filter(p => p.isAlive && p.role === 'werewolf');
+                const humanWolfAlive = wolves.some(p => !p.isAi);
+                if (!humanWolfAlive && !data.nightData.wolfKillTarget) {
+                    withLock(`WOLF-${day}`, () => aiWolfKill(data));
+                }
+            }
+
+            if (data.gameState === 'NIGHT_SEER') {
+                const seer = data.players.find(p => p.role === 'seer');
+                if (seer && seer.isAlive && seer.isAi) {
+                    withLock(`SEER-${day}`, () => aiSeerCheck(data, seer));
+                } else if (!seer || !seer.isAlive) {
+                    withLock(`SEER-${day}`, async () => {
+                        await new Promise(r => setTimeout(r, 1200));
+                        await updateRoomState({
+                            gameState: 'NIGHT_WITCH',
+                            logs: [...data.logs, { time: getCurrentTime(), text: '預言家已完成查驗，女巫請睜眼。', type: 'system' }]
+                        });
+                    });
+                }
+            }
+
+            if (data.gameState === 'NIGHT_WITCH') {
+                const witch = data.players.find(p => p.role === 'witch');
+                if (witch && witch.isAlive && witch.isAi) {
+                    withLock(`WITCH-${day}`, () => aiWitchAct(data, witch));
+                } else if (!witch || !witch.isAlive) {
+                    withLock(`WITCH-${day}`, async () => {
+                        await new Promise(r => setTimeout(r, 1200));
+                        await resolveNightAndStartDay();
+                    });
+                }
+            }
+
+            if (data.gameState === 'DAY_SPEAK') {
+                const speaker = data.players.find(p => p.id === data.currentSpeakerSeat);
+                if (speaker && speaker.isAi && speaker.isAlive) {
+                    withLock(`SPEAK-${day}-${speaker.id}`, () => aiSpeak(data, speaker));
+                }
+            }
+
+            if (data.gameState === 'DAY_VOTE') {
+                const pending = data.players.some(p => p.isAi && p.isAlive && p.votedFor === null);
+                if (pending) withLock(`VOTE-${day}`, () => aiVoteAll(data));
+            }
+        };
+
+        const resolveNightAndStartDay = async () => {
+            const data = roomData.value;
+            const killedTargetId = data.nightData.wolfKillTarget;
+            const savedTargetId = data.nightData.witchSavedTarget;
+            const deaths = [];
+
+            const updatedPlayers = data.players.map(p => {
+                if (p.id === killedTargetId && savedTargetId !== killedTargetId) {
+                    deaths.push(p.id);
+                    return { ...p, isAlive: false };
+                }
+                return p;
+            });
+
+            const newLogs = [...data.logs, { time: getCurrentTime(), text: `=== 第 ${data.dayCount} 天：太陽升起 ===`, type: 'system' }];
+            if (deaths.length === 0) {
+                newLogs.push({ time: getCurrentTime(), text: '昨夜是個平安夜，無人倒牌！', type: 'system' });
+            } else {
+                newLogs.push({ time: getCurrentTime(), text: `昨夜倒牌的玩家為：${deaths.join(', ')} 號！`, type: 'danger' });
+            }
+
+            const aliveWolves = updatedPlayers.filter(p => p.isAlive && p.role === 'werewolf');
+            const aliveGood = updatedPlayers.filter(p => p.isAlive && p.role !== 'werewolf');
+
+            if (aliveWolves.length === 0) {
+                newLogs.push({ time: getCurrentTime(), text: '🎉【好人陣營獲勝！】所有狼人已被剷除！', type: 'system' });
+                await updateRoomState({ players: updatedPlayers, logs: newLogs, gameState: 'GAME_OVER' });
+                return;
+            } else if (aliveWolves.length >= aliveGood.length) {
+                newLogs.push({ time: getCurrentTime(), text: '🐺【狼人陣營獲勝！】狼人掌控了村莊！', type: 'danger' });
+                await updateRoomState({ players: updatedPlayers, logs: newLogs, gameState: 'GAME_OVER' });
+                return;
+            }
+
+            const firstAliveSeat = updatedPlayers.find(p => p.isAlive)?.id || 1;
+            await updateRoomState({
+                players: updatedPlayers,
+                logs: newLogs,
+                gameState: 'DAY_SPEAK',
+                currentSpeakerSeat: firstAliveSeat
+            });
+        };
+
+        const submitSpeech = async () => {
+            if (!humanSpeechText.value.trim()) return;
+            const text = humanSpeechText.value.trim();
+            
+            if (!isFirebaseEnv && !isHost.value) {
+                if (peerConns['host'] && peerConns['host'].open) {
+                    peerConns['host'].send({ type: 'GUEST_ACTION', actionType: 'SPEECH', seat: mySeat.value, text });
+                }
+                isWritingSpeech.value = false;
+                humanSpeechText.value = '';
+                return;
+            }
+
+            await handleGuestSpeechSubmission(mySeat.value, text);
+            isWritingSpeech.value = false;
+            humanSpeechText.value = '';
+        };
+
+        const handleGuestSpeechSubmission = async (seat, text) => {
+            const data = roomData.value;
+            const speakerPlayer = data.players.find(p => p.id === seat);
+            const updatedPlayers = data.players.map(p => p.id === seat ? { ...p, lastSpeech: text } : p);
+            const updatedLogs = [...data.logs, { time: getCurrentTime(), text: text, type: 'speech', speaker: speakerPlayer?.name || '玩家' }];
+
+            const aliveSeats = data.players.filter(p => p.isAlive).map(p => p.id);
+            const currentIndex = aliveSeats.indexOf(seat);
+            const nextSeat = currentIndex < aliveSeats.length - 1 ? aliveSeats[currentIndex + 1] : null;
+
+            if (nextSeat) {
+                await updateRoomState({
+                    players: updatedPlayers,
+                    logs: updatedLogs,
+                    currentSpeakerSeat: nextSeat
+                });
+            } else {
+                await updateRoomState({
+                    players: updatedPlayers,
+                    logs: [...updatedLogs, { time: getCurrentTime(), text: '所有玩家發言完畢，進入公決投票階段！', type: 'system' }],
+                    gameState: 'DAY_VOTE'
+                });
+            }
+        };
+
+        const selectTarget = (targetId) => {
+            if (activeTargetCallback.value) activeTargetCallback.value(targetId);
+        };
+
+        const handleGuestTargetAction = async (stage, seat, targetId, extra = {}) => {
+            if (stage === 'NIGHT_WOLF') {
+                await updateRoomState({
+                    'nightData.wolfKillTarget': targetId,
+                    gameState: 'NIGHT_SEER'
+                });
+            } else if (stage === 'NIGHT_SEER') {
+                await updateRoomState({
+                    'nightData.seerCheckTarget': targetId,
+                    gameState: 'NIGHT_WITCH'
+                });
+            } else if (stage === 'NIGHT_WITCH') {
+                if (extra.action === 'HEAL') {
+                    await handleWitchActionHost(targetId, true);
+                } else {
+                    await handleWitchActionHost(null, false);
+                }
+            } else if (stage === 'DAY_VOTE') {
+                await processVoteAction(seat, targetId);
+            }
+        };
+
+        const handleWitchActionHost = async (targetId, didHeal) => {
+            const nightData = { ...roomData.value.nightData };
+            if (didHeal) {
+                nightData.witchSaveUsed = true;
+                nightData.witchSavedTarget = targetId;
+            }
+            await updateRoomState({ nightData });
+            await resolveNightAndStartDay();
+        };
+
+        const processVoteAction = async (voterSeat, targetId) => {
+            const data = roomData.value;
+            const updatedPlayers = data.players.map(p => p.id === voterSeat ? { ...p, votedFor: targetId } : p);
+            await finalizeVotesIfComplete(data, updatedPlayers);
+        };
+
+        const useWitchHeal = async () => {
+            const targetId = killedTargetId.value;
+            if (!targetId) return;
+            selectableTargets.value = [];
+            showToast(`您使用解藥救活了 ${targetId} 號！`);
+
+            if (!isFirebaseEnv && !isHost.value) {
+                peerConns['host']?.send({ type: 'GUEST_ACTION', actionType: 'ACTION_TARGET', stage: 'NIGHT_WITCH', seat: mySeat.value, targetId, action: 'HEAL' });
+            } else {
+                await handleWitchActionHost(targetId, true);
+            }
+        };
+
+        const skipWitchAction = async () => {
+            selectableTargets.value = [];
+            showToast('已選擇不使用藥劑。');
+
+            if (!isFirebaseEnv && !isHost.value) {
+                peerConns['host']?.send({ type: 'GUEST_ACTION', actionType: 'ACTION_TARGET', stage: 'NIGHT_WITCH', seat: mySeat.value, targetId: null, action: 'SKIP' });
+            } else {
+                await handleWitchActionHost(null, false);
+            }
+        };
+
+        watch([gameState, myRole, mySeat, () => roomData.value?.nightData?.wolfKillTarget], () => {
+            selectableTargets.value = [];
+            activeTargetCallback.value = null;
+
+            if (!myPlayer.value?.isAlive) return;
+
+            const stage = gameState.value;
+            const role = myRole.value;
+
+            // WEREWOLF
+            if (stage === 'NIGHT_WOLF' && role === 'werewolf') {
+                const candidates = roomPlayers.value.filter(p => p.isAlive && p.role !== 'werewolf').map(p => p.id);
+                selectableTargets.value = candidates;
+                activeTargetCallback.value = async (targetId) => {
+                    selectableTargets.value = [];
+                    showToast(`您指定襲擊 ${targetId} 號！`);
+                    if (!isFirebaseEnv && !isHost.value) {
+                        peerConns['host']?.send({ type: 'GUEST_ACTION', actionType: 'ACTION_TARGET', stage: 'NIGHT_WOLF', seat: mySeat.value, targetId });
+                    } else {
+                        await updateRoomState({ 'nightData.wolfKillTarget': targetId, gameState: 'NIGHT_SEER' });
+                    }
+                };
+            }
+
+            // SEER
+            if (stage === 'NIGHT_SEER' && role === 'seer') {
+                const candidates = roomPlayers.value.filter(p => p.isAlive && p.id !== mySeat.value).map(p => p.id);
+                selectableTargets.value = candidates;
+                activeTargetCallback.value = async (targetId) => {
+                    selectableTargets.value = [];
+                    const target = roomPlayers.value.find(p => p.id === targetId);
+                    const isWolf = target?.role === 'werewolf';
+                    showToast(`驗人結果：${targetId} 號是【${isWolf ? '狼人' : '好人'}】！`);
+
+                    if (!isFirebaseEnv && !isHost.value) {
+                        peerConns['host']?.send({ type: 'GUEST_ACTION', actionType: 'ACTION_TARGET', stage: 'NIGHT_SEER', seat: mySeat.value, targetId });
+                    } else {
+                        await updateRoomState({ gameState: 'NIGHT_WITCH' });
+                    }
+                };
+            }
+
+            // WITCH
+            if (stage === 'NIGHT_WITCH' && role === 'witch') {
+                const killedId = roomData.value?.nightData?.wolfKillTarget;
+                const witchSaveUsed = roomData.value?.nightData?.witchSaveUsed;
+
+                if (killedId && !witchSaveUsed) {
+                    selectableTargets.value = [killedId];
+                    activeTargetCallback.value = async (targetId) => {
+                        await useWitchHeal();
+                    };
+                }
+            }
+
+            // VOTING
+            if (stage === 'DAY_VOTE' && myPlayer.value?.isAlive) {
+                const candidates = roomPlayers.value.filter(p => p.isAlive && p.id !== mySeat.value).map(p => p.id);
+                selectableTargets.value = candidates;
+                activeTargetCallback.value = async (targetId) => {
+                    selectableTargets.value = [];
+                    showToast(`您投給了 ${targetId} 號！`);
+                    if (!isFirebaseEnv && !isHost.value) {
+                        peerConns['host']?.send({ type: 'GUEST_ACTION', actionType: 'ACTION_TARGET', stage: 'DAY_VOTE', seat: mySeat.value, targetId });
+                    } else {
+                        await processVoteAction(mySeat.value, targetId);
+                    }
+                };
+            }
+        }, { immediate: true });
+
+        watch(roomData, () => {
+            if (!isFirebaseEnv && isHost.value) {
+                handleHostAiAutomation();
+            }
+        }, { deep: true });
+
+        const saveApiKey = () => {
+            apiKey.value = apiKeyInput.value.trim();
+            aiModel.value = aiModelInput.value;
+            localStorage.setItem('gemini_api_key', apiKey.value);
+            localStorage.setItem('gemini_ai_model', aiModel.value);
+            aiKeyWarned = false;
+            showApiModal.value = false;
+            showToast(`API 設定完成！使用模型：${aiModel.value}`);
+        };
+
+        const getRoleName = (role) => ({ werewolf: '狼人', seer: '預言家', witch: '女巫', villager: '平民' })[role] || '未知';
+        const getRoleBadgeClass = (role) => ({
+            werewolf: 'bg-red-950 text-red-300 border border-red-700',
+            seer: 'bg-purple-950 text-purple-300 border border-purple-700',
+            witch: 'bg-emerald-950 text-emerald-300 border border-emerald-700',
+            villager: 'bg-slate-800 text-slate-300 border border-slate-700'
+        })[role] || 'bg-slate-900 text-slate-400';
+
+        const getRoleIcon = (role) => ({
+            werewolf: 'fa-solid fa-spaghetti-monster-flying',
+            seer: 'fa-solid fa-eye',
+            witch: 'fa-solid fa-flask text-emerald-400',
+            villager: 'fa-solid fa-user'
+        })[role] || 'fa-solid fa-question';
+
+        const getLogColor = (type) => ({
+            system: 'text-amber-400 font-semibold',
+            danger: 'text-red-400 font-bold',
+            speech: 'text-slate-100',
+            action: 'text-indigo-300'
+        })[type] || 'text-slate-400';
+
+        return {
+            apiKey, apiKeyInput, aiModel, aiModelInput, showApiModal, toastMessage, playerNameInput, joinCodeInput,
+            roomId, roomCode, roomData, isWritingSpeech, humanSpeechText, selectableTargets,
+            isAiThinking, isConnecting, thoughtBox, logBox, gameState, isNight, roomPlayers, myPlayer,
+            mySeat, myRole, isHost, currentPhaseTitle, phaseStatusText, userInstructionText,
+            canSpeakNow, canUseWitchHeal, canSkipWitch, killedTargetId, aiThoughts, gameLogs, currentUid, networkModeText,
+            copyRoomCode, createRoom, joinRoom, leaveRoom, saveApiKey, startGameWithAiFill,
+            submitSpeech, selectTarget, useWitchHeal, skipWitchAction, getRoleName, getRoleBadgeClass,
+            getRoleIcon, getLogColor
+        };
+    }
+}).mount('#app');
+</script>
+
+</body>
+</html>
