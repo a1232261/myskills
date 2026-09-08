@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D 戰術訓練場 - V5 終極四人連線修復版</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            user-select: none;
+            background-color: #05070f;
+            touch-action: none; 
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        #menu {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(10, 12, 22, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #4df;
+            z-index: 10;
+        }
+        .menu-box {
+            text-align: center;
+            border: 2px solid #4df;
+            padding: 25px;
+            border-radius: 15px;
+            background: rgba(15, 20, 35, 0.95);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.35);
+            max-width: 450px;
+            width: 85%;
+        }
+        .map-btn {
+            background: transparent;
+            border: 1px solid #4df;
+            color: #4df;
+            padding: 10px 15px;
+            margin: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: 0.2s;
+            display: inline-block;
+            touch-action: manipulation;
+        }
+        .map-btn:hover { background: #4df; color: #000; box-shadow: 0 0 15px #4df; }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #00ffff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 5;
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffff;
+            font-size: 16px;
+            font-family: monospace;
+            z-index: 5;
+            pointer-events: auto; 
+            background: rgba(0,0,0,0.7);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #00ffff;
+        }
+        #weapon-name {
+            color: #ff3366; 
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 3px;
+            border: 1px solid #ff3366;
+            background: rgba(255,51,102,0.15);
+            display: inline-block;
+            margin: 5px 0;
+            cursor: pointer;
+        }
+        .hp-container {
+            width: 150px;
+            height: 12px;
+            background: #222;
+            margin-top: 5px;
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+        #hp-fill { width: 100%; height: 100%; background: #ff3366; transition: width 0.1s; }
+        #shield-fill { width: 100%; height: 100%; background: #00aaff; transition: width 0.1s; }
+        
+        #damage-flash {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: rgba(255,0,85,0);
+            pointer-events: none; z-index: 4; transition: background 0.1s;
+        }
+
+        #game-over-screen, #rematch-screen {
+            display: none; position: absolute; width: 100%; height: 100%;
+            background: rgba(10, 12, 22, 0.92); z-index: 11;
+            justify-content: center; align-items: center; color: #ff3366; flex-direction: column;
+        }
+        .over-box {
+            text-align: center; border: 2px solid #ff3366; padding: 30px;
+            border-radius: 15px; background: rgba(25, 10, 15, 0.95);
+            box-shadow: 0 0 30px rgba(255, 51, 102, 0.4); max-width: 400px; width: 80%;
+        }
+
+        #custom-alert {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 7, 15, 0.85); z-index: 999; justify-content: center; align-items: center;
+        }
+        .alert-box {
+            text-align: center; border: 2px solid #ffaa00; padding: 25px; border-radius: 15px;
+            background: rgba(25, 20, 15, 0.95); box-shadow: 0 0 25px rgba(255, 170, 0, 0.45);
+            max-width: 380px; width: 80%; color: #fff;
+        }
+
+        /* 虛擬按鍵面板 (行動裝置) */
+        #mobile-controls { display: none; position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: 8; }
+        #joystick-container { position: absolute; bottom: 40px; left: 40px; width: 110px; height: 110px; background: rgba(255, 255, 255, 0.08); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 50%; pointer-events: auto; }
+        #joystick-knob { position: absolute; top: 32px; left: 32px; width: 42px; height: 42px; background: #00ffff; border-radius: 50%; box-shadow: 0 0 10px #00ffff; }
+        .action-btn { position: absolute; width: 60px; height: 60px; background: rgba(15,20,35,0.85); border: 2px solid #00ffff; color: #00ffff; border-radius: 50%; font-size: 22px; display: flex; justify-content: center; align-items: center; pointer-events: auto; }
+        #btn-weapon { bottom: 190px; right: 30px; border-color: #00ffff; color: #00ffff; font-size: 20px; }
+        #btn-shoot { bottom: 110px; right: 30px; border-color: #ff3366; color: #ff3366; }
+        #btn-jump { bottom: 30px; right: 30px; }
+        #btn-slide { bottom: 110px; right: 110px; }
+        #btn-melee { bottom: 30px; right: 110px; }
+        
+        #btn-pause { position: absolute; top: 20px; right: 20px; z-index: 9; background: rgba(0,0,0,0.6); color: #00ffff; border: 1px solid #00ffff; padding: 8px 15px; border-radius: 5px; display: none; pointer-events: auto; }
+        #network-status { font-size: 13px; color: #ffaa00; margin-top: 10px; }
+        input { user-select: text !important; -webkit-user-select: text !important; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+</head>
+<body>
+    <div id="damage-flash"></div>
+    <div id="custom-alert">
+        <div class="alert-box">
+            <h3 id="alert-title" style="margin-top: 0; color: #ffaa00;">⚠️ 系統提示</h3>
+            <p id="alert-msg" style="font-size: 15px; margin: 15px 0; color: #eee;"></p>
+            <button class="map-btn" style="border-color: #ffaa00; color: #ffaa00;" onclick="closeCustomAlert()">確認</button>
+        </div>
+    </div>
+    <div id="game-over-screen">
+        <div class="over-box">
+            <h2 style="margin-top: 0;">❌ 戰鬥終止</h2>
+            <p style="color: #fff;">得分: <span id="final-score" style="color: #4df; font-weight: bold; font-size: 24px;">0</span></p>
+            <button class="map-btn" style="border-color: #ff3366; color: #ff3366;" onclick="closeGameOver()">返回大廳</button>
+        </div>
+    </div>
+    <div id="rematch-screen">
+        <div class="rematch-box">
+            <h2 id="rematch-title" style="margin-top: 0; color: #00ffff;">⚔️ 戰局結束</h2>
+            <p style="color: #fff;">戰區重整中...</p>
+            <div id="rematch-timer" style="font-size: 64px; font-weight: bold; color: #ff3366;">5</div>
+            <button class="map-btn" style="border-color: #ff3366; color: #ff3366;" onclick="exitRematch()">退出對決</button>
+        </div>
+    </div>
+    <div id="menu">
+        <div class="menu-box" id="menu-lobby-select">
+            <h2 style="margin-top: 0; font-size: 22px;">🎯 3D 戰術訓練場 V5</h2>
+            <p style="color: #ccc; font-size: 13px; text-align: left; line-height: 1.5; margin-bottom: 15px;">
+                <b>移動：</b>WASD 　<b>轉向：</b>滑鼠<br>
+                <b>開火：</b>左鍵　　 <b>跳躍：</b>空白鍵<br>
+                <b>滑鏟：</b>Shift　　<b>切槍：</b>1~4 數字鍵
+            </p>
+            <button class="map-btn" onclick="switchSubMenu('single')">👤 單人打靶</button>
+            <button class="map-btn" onclick="switchSubMenu('multi')">⚔️ 多人連線 (支援2v2)</button>
+        </div>
+        <div class="menu-box" id="menu-single-select" style="display: none;">
+            <h2>👤 選擇訓練場地：</h2>
+            <button class="map-btn" onclick="startSoloGame('neon')">🌐 霓虹網格</button>
+            <button class="map-btn" onclick="startSoloGame('maze')">🧱 立體迷宮</button>
+            <button class="map-btn" onclick="startSoloGame('lava')">🔥 熔岩煉獄</button>
+            <br><button class="map-btn" style="border-color:#888; color:#888; margin-top: 15px;" onclick="switchSubMenu('lobby')">返回</button>
+        </div>
+        <div class="menu-box" id="menu-multi-lobby" style="display: none;">
+            <h2>⚔️ 區域網路大廳</h2>
+            <button class="map-btn" onclick="initHost()">🏠 創立伺服器 (房主)</button>
+            <div style="margin: 10px 0; color: #888;">— 或 —</div>
+            <input type="text" id="join-code" placeholder="輸入4位密碼" style="padding: 10px; font-size: 15px; border-radius: 5px; border: 1px solid #4df; background: #05070f; color: #4df; text-align: center; width: 150px;">
+            <button class="map-btn" onclick="initJoiner()">⚡ 加入連線</button>
+            <div id="network-status"></div>
+            <br><button class="map-btn" style="border-color:#888; color:#888; margin-top: 15px;" onclick="switchSubMenu('lobby')">返回</button>
+        </div>
+        <div class="menu-box" id="menu-multi-hosting" style="display: none;">
+            <h2>🏠 伺服器運作中</h2>
+            <h1 id="host-id-display" style="font-size: 46px; color: #ff3366; letter-spacing: 5px; margin: 10px 0;">----</h1>
+            <p style="color: #aaa; font-size: 12px; margin-bottom: 20px;">最多可支援 4 名玩家加入...</p>
+            <button class="map-btn" onclick="startMultiGame()">🔥 所有人準備就緒，直接開戰</button><br>
+            <button class="map-btn" style="border-color:#888; color:#888; margin-top:10px;" onclick="cancelNetwork()">解散房間</button>
+        </div>
+    </div>
+    <div id="crosshair"></div>
+    <div id="hud">
+        SCORE: <span id="score">0</span><br>
+        TEAM: <span id="team-name" style="color: #fff;">SOLO</span><br>
+        <div id="weapon-name" onclick="cycleWeapon()">[1] LASER RIFLE</div>
+        <div class="hp-container" style="border-color:#ff3366;"><div id="hp-fill"></div></div>
+        <div style="font-size: 11px; color: #ff3366;">HP: <span id="hp-text">100</span>/100</div>
+        
+        <div class="hp-container" id="shield-bar" style="border-color:#00aaff; margin-top:8px; display:none;"><div id="shield-fill"></div></div>
+        <div id="shield-text-container" style="font-size: 11px; color: #00aaff; display:none;">SHIELD: <span id="shield-text">100</span>/100</div>
+    </div>
+    <div id="btn-pause">MENU</div>
+    <div id="mobile-controls">
+        <div id="joystick-container"><div id="joystick-knob"></div></div>
+        <div id="btn-weapon" class="action-btn">🔫</div>
+        <div id="btn-shoot" class="action-btn">💥</div>
+        <div id="btn-melee" class="action-btn">⚔️</div>
+        <div id="btn-slide" class="action-btn">⚡</div>
+        <div id="btn-jump" class="action-btn">🦘</div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls, gameGroup = null;
+        let isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+        let selectedMap = 'neon', hp = 100, shieldHp = 100, score = 0;
+        
+        const move = { forward: false, backward: false, left: false, right: false };
+        let velocity = new THREE.Vector3(); 
+        let canJump = false;
+        
+        let isSliding = false;
+        let slideTimer = 0;
+
+        let currentWeapon = 0;
+        let lastRPGFireTime = 0;
+        let isSwinging = false, swingTime = 0;
+        let rifleMesh, rpgMesh, swordMesh, shieldMesh;
+
+        const obstacles = [], obstacleBoxes = [], targets = [];
+        const hostileDrones = [], enemyProjectiles = [], myRockets = [], explosions = [];
+        let droneProjGeo, droneProjMat, rpgProjGeo, rpgProjMat;
+
+        const rtcConfig = { 
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            ] 
+        };
+        
+        let peer = null, myId = "";
+        let isMultiplayer = false, isHost = false;
+        let hostConn = null; 
+        let clientConns = {}; 
+        let gameState = { players: {} }; 
+        let opponentMeshes = {}; 
+        let myTeam = 0; 
+
+        let gameActive = false, rematchInterval = null;
+        let desktopDragging = false, dragLastX = 0, dragLastY = 0;
+        let lastNetworkSendTime = 0; // 【新增】獨立的網路發送計時器
+        function showAlert(msg, title = "⚠️ 系統提示") {
+            document.getElementById('alert-title').innerText = title;
+            document.getElementById('alert-msg').innerText = msg;
+            document.getElementById('custom-alert').style.display = 'flex';
+        }
+        function closeCustomAlert() { document.getElementById('custom-alert').style.display = 'none'; }
+
+        window.onload = function() {
+            initEngine();
+            if (isMobile) setupMobileUI();
+            setupDesktopFallbackLook();
+        };
+
+        function initEngine() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.PointerLockControls(camera, document.body);
+            controls.addEventListener('lock', () => { document.getElementById('menu').style.display = 'none'; });
+            controls.addEventListener('unlock', () => {
+                if (!isMobile && document.getElementById('rematch-screen').style.display !== 'flex' && document.getElementById('game-over-screen').style.display !== 'flex') {
+                    document.getElementById('menu').style.display = 'flex';
+                }
+            });
+            document.body.addEventListener('click', (e) => {
+                if (e.target.id === 'weapon-name') return; 
+                if (!isMobile && gameActive && !controls.isLocked && document.getElementById('menu').style.display === 'none') controls.lock();
+            });
+
+            rifleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.6), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+            rifleMesh.position.set(0.3, -0.25, -0.5);
+            camera.add(rifleMesh);
+
+            let rpgGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8);
+            rpgGeo.rotateX(Math.PI / 2);
+            rpgMesh = new THREE.Mesh(rpgGeo, new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
+            rpgMesh.position.set(0.3, -0.25, -0.6);
+            camera.add(rpgMesh);
+
+            // 【修復】第一人稱光束劍：朝前方與上方自然前傾
+            let swordGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.2, 8);
+            swordGeo.translate(0, 0.6, 0); 
+            swordMesh = new THREE.Mesh(swordGeo, new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.5 }));
+            swordMesh.position.set(0.3, -0.4, -0.5);
+            swordMesh.rotation.set(-Math.PI / 4, 0, -Math.PI / 6);
+            camera.add(swordMesh);
+
+            let shieldGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16, 1, false, 0, Math.PI);
+            shieldGeo.rotateX(Math.PI / 2);
+            shieldMesh = new THREE.Mesh(shieldGeo, new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.3, side: THREE.DoubleSide }));
+            shieldMesh.position.set(0, -0.2, -0.9);
+            camera.add(shieldMesh);
+
+            scene.add(camera);
+
+            droneProjGeo = new THREE.SphereGeometry(0.4, 8, 8);
+            droneProjMat = new THREE.MeshStandardMaterial({ color: 0xff3300, emissive: 0xff1100, roughness: 0.1 });
+            rpgProjGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.6, 8);
+            rpgProjGeo.rotateX(Math.PI/2);
+            rpgProjMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x663300 });
+
+            setupKeyboardInput();
+            updateWeaponUI(); 
+            animate();
+        }
+
+        function cycleWeapon() {
+            if (isSliding) return;
+            currentWeapon = (currentWeapon + 1) % 4;
+            updateWeaponUI();
+        }
+
+        function setWeapon(idx) {
+            if (isSliding) return;
+            currentWeapon = idx;
+            updateWeaponUI();
+        }
+
+        function updateWeaponUI() {
+            rifleMesh.visible = false;
+            rpgMesh.visible = false;
+            swordMesh.visible = false;
+            shieldMesh.visible = false;
+            document.getElementById('shield-bar').style.display = 'none';
+            document.getElementById('shield-text-container').style.display = 'none';
+
+            // 更新手機版武器切換按鈕圖示
+            const btnW = document.getElementById('btn-weapon');
+            const icons = ['🔫', '🚀', '⚔️', '🛡️'];
+            if (btnW) btnW.innerText = icons[currentWeapon] || '🔄';
+
+            const wName = document.getElementById('weapon-name');
+            if (isSliding) {
+                wName.innerText = "⚡ SLIDING...";
+                wName.style.color = wName.style.borderColor = "#aaa";
+                return;
+            }
+
+            if (currentWeapon === 0) {
+                wName.innerText = "[1] LASER RIFLE";
+                wName.style.color = wName.style.borderColor = "#00ffff";
+                rifleMesh.visible = true;
+            } else if (currentWeapon === 1) {
+                wName.innerText = "[2] RPG ROCKET";
+                wName.style.color = wName.style.borderColor = "#ffaa00";
+                rpgMesh.visible = true;
+            } else if (currentWeapon === 2) {
+                wName.innerText = "[3] CYBER SABER";
+                wName.style.color = wName.style.borderColor = "#00ffaa";
+                swordMesh.visible = true;
+            } else if (currentWeapon === 3) {
+                wName.innerText = "[4] ENERGY SHIELD";
+                wName.style.color = wName.style.borderColor = "#00aaff";
+                shieldMesh.visible = true;
+                document.getElementById('shield-bar').style.display = 'block';
+                document.getElementById('shield-text-container').style.display = 'block';
+                document.getElementById('shield-fill').style.width = shieldHp + '%';
+                document.getElementById('shield-text').innerText = shieldHp;
+            }
+        }
+
+        function switchSubMenu(target) {
+            document.querySelectorAll('.menu-box').forEach(el => el.style.display = 'none');
+            let targetId = '';
+            if (target === 'lobby') targetId = 'menu-lobby-select';
+            else if (target === 'single') targetId = 'menu-single-select';
+            else if (target === 'multi') targetId = 'menu-multi-lobby';
+            else if (target === 'hosting') targetId = 'menu-multi-hosting';
+            
+            if (targetId) {
+                const el = document.getElementById(targetId);
+                if (el) el.style.display = 'block';
+            }
+        }
+
+        let networkTimeout = null;
+
+        function initHost() {
+            const statusEl = document.getElementById('network-status');
+            if (statusEl) statusEl.innerText = "⏳ 正在向連線伺服器註冊房間...";
+
+            const rawId = Math.floor(1000 + Math.random() * 9000).toString();
+            myId = "HOST_" + rawId;
+
+            if (peer) { try { peer.destroy(); } catch(e){} }
+
+            peer = new Peer(myId, { config: rtcConfig, debug: 1 });
+
+            networkTimeout = setTimeout(() => {
+                if (!isHost) {
+                    showAlert("連線伺服器回應超時！請檢查網路或稍後再試。");
+                    cancelNetwork();
+                }
+            }, 8000);
+
+            peer.on('open', () => {
+                if (networkTimeout) clearTimeout(networkTimeout);
+                isHost = true;
+                isMultiplayer = true;
+                myTeam = 0; 
+                gameState.players[myId] = { team: myTeam, pos:{x:0,y:2.5,z:-20}, rot:Math.PI, pitch:0, weapon:0, hp:100, shieldHp:100 };
+                
+                if (statusEl) statusEl.innerText = "";
+                switchSubMenu('hosting');
+                document.getElementById('host-id-display').innerText = rawId;
+            });
+
+            peer.on('connection', (c) => {
+                c.on('open', () => {
+                    let teamAssigned = Object.keys(clientConns).length % 2 === 0 ? 1 : 0; 
+                    clientConns[c.peer] = c;
+                    gameState.players[c.peer] = { team: teamAssigned, pos:{x:0,y:2.5,z:20}, rot:0, pitch:0, weapon:0, hp:100, shieldHp:100 };
+                    c.send({ type: 'init', myId: c.peer, team: teamAssigned });
+                    
+                    c.on('data', (data) => handleDataFromClient(c.peer, data));
+                    c.on('close', () => { delete clientConns[c.peer]; delete gameState.players[c.peer]; removeOpponentMesh(c.peer); });
+                });
+            });
+
+            peer.on('error', (err) => {
+                if (networkTimeout) clearTimeout(networkTimeout);
+                console.error("PeerJS Host Error:", err);
+                showAlert("連線建立失敗: " + (err.type || "網絡異常，請重試"));
+                cancelNetwork();
+            });
+        }
+
+        function initJoiner() {
+            const rawId = document.getElementById('join-code').value.trim();
+            if (rawId.length !== 4) return showAlert("請輸入4位密碼");
+
+            const statusEl = document.getElementById('network-status');
+            if (statusEl) statusEl.innerText = "⚡ 正在尋找房主並建立通道...";
+
+            myId = "CLIENT_" + Math.random().toString(36).substr(2,9);
+
+            if (peer) { try { peer.destroy(); } catch(e){} }
+
+            peer = new Peer(myId, { config: rtcConfig, debug: 1 });
+
+            networkTimeout = setTimeout(() => {
+                showAlert("尋找房間超時！請確認密碼是否正確，且房主已開啟房間。");
+                cancelNetwork();
+            }, 8000);
+
+            peer.on('open', () => {
+                isHost = false;
+                isMultiplayer = true;
+                hostConn = peer.connect("HOST_" + rawId);
+
+                hostConn.on('open', () => {
+                    if (networkTimeout) clearTimeout(networkTimeout);
+                    if (statusEl) statusEl.innerText = "✅ 已成功連線！等待房主開始戰鬥...";
+                    hostConn.on('data', handleDataFromHost);
+                    hostConn.on('close', () => { showAlert("🔌 與伺服器斷線"); location.reload(); });
+                });
+
+                hostConn.on('error', (err) => {
+                    if (networkTimeout) clearTimeout(networkTimeout);
+                    showAlert("加入房間失敗: " + err);
+                    cancelNetwork();
+                });
+            });
+
+            peer.on('error', (err) => {
+                if (networkTimeout) clearTimeout(networkTimeout);
+                console.error("PeerJS Joiner Error:", err);
+                showAlert("加入連線失敗: 密碼錯誤或伺服器未回應");
+                cancelNetwork();
+            });
+        }
+
+        function startMultiGame() {
+            if (!isHost) return;
+            broadcastToClients({ type: 'start_game', map: 'neon' });
+            startGame('neon');
+        }
+
+        function cancelNetwork() {
+            if (networkTimeout) clearTimeout(networkTimeout);
+            const statusEl = document.getElementById('network-status');
+            if (statusEl) statusEl.innerText = "";
+            if (hostConn) { try { hostConn.close(); } catch(e){} hostConn = null; }
+            Object.values(clientConns).forEach(c => { try { c.close(); } catch(e){} });
+            clientConns = {};
+            if (peer) { try { peer.destroy(); } catch(e){} peer = null; }
+            isMultiplayer = false;
+            isHost = false;
+            switchSubMenu('multi');
+        }
+
+        function handleDataFromClient(clientId, data) {
+            if (data.type === 'sync') {
+                if(gameState.players[clientId]) {
+                    Object.assign(gameState.players[clientId], data.state);
+                }
+            } else if (data.type === 'hit') {
+                let target = gameState.players[data.targetId];
+                if (target) {
+                    target.hp -= data.damage;
+                    if(target.hp <= 0) target.hp = 0; 
+                }
+            } else if (data.type === 'shoot' || data.type === 'rpg_shoot') {
+                data.sourceId = clientId;
+                broadcastToClients(data); 
+            }
+        }
+
+        function hostBroadcastLoop() {
+            if (isHost && gameActive) {
+                gameState.players[myId] = {
+                    team: myTeam, pos: camera.position.clone(), rot: camera.rotation.y, pitch: camera.rotation.x,
+                    weapon: currentWeapon, isSliding: isSliding, isSwinging: isSwinging, swingTime: swingTime,
+                    hp: hp, shieldHp: shieldHp
+                };
+                updateOpponentsFromState(); // 【修復1】房主端也必須更新並繪製對手模型
+                broadcastToClients({ type: 'world_state', players: gameState.players });
+            }
+        }
+
+        function broadcastToClients(data) {
+            Object.values(clientConns).forEach(c => c.send(data));
+        }
+
+        function handleDataFromHost(data) {
+            if (data.type === 'init') {
+                myId = data.myId;
+                myTeam = data.team;
+                document.getElementById('network-status').innerText = "等待房主開戰...";
+            } else if (data.type === 'start_game') {
+                startGame(data.map);
+            } else if (data.type === 'world_state') {
+                gameState.players = data.players;
+                updateOpponentsFromState();
+                
+                if(gameState.players[myId]) {
+                    if (gameState.players[myId].hp < hp) takeDamage(hp - gameState.players[myId].hp, null, true); 
+                }
+            } else if (data.type === 'shoot' && data.sourceId !== myId) {
+                renderOpponentLaser(data.origin, data.target, gameState.players[data.sourceId]?.team);
+            } else if (data.type === 'rpg_shoot' && data.sourceId !== myId) {
+                spawnOpponentRocket(data.origin, data.dir, gameState.players[data.sourceId]?.team);
+            }
+        }
+
+        function updateOpponentsFromState() {
+            for (let id in gameState.players) {
+                if (id === myId) continue;
+                let p = gameState.players[id];
+                if (!p || !p.pos) continue;
+                if (!opponentMeshes[id]) createOpponentMesh(id, p.team);
+                
+                let mesh = opponentMeshes[id];
+                let targetPos = new THREE.Vector3(p.pos.x, p.pos.y, p.pos.z);
+                mesh.position.lerp(targetPos, 0.3);
+                mesh.rotation.y += Math.atan2(Math.sin(p.rot - mesh.rotation.y), Math.cos(p.rot - mesh.rotation.y)) * 0.3;
+                
+                let body = mesh.getObjectByName("body"), head = mesh.getObjectByName("head"), visor = mesh.getObjectByName("visor");
+                if (p.isSliding) {
+                    if(body) { body.scale.y = 0.5; body.position.y = 0.45; }
+                    if(head) head.position.y = 1.0; if(visor) visor.position.y = 1.05;
+                } else {
+                    if(body) { body.scale.y = 1.0; body.position.y = 0.9; }
+                    if(head) head.position.y = 1.9; if(visor) visor.position.y = 1.95;
+                }
+
+                mesh.getObjectByName("rifle").visible = (p.weapon === 0);
+                mesh.getObjectByName("rpg").visible = (p.weapon === 1);
+                mesh.getObjectByName("sword").visible = (p.weapon === 2);
+                mesh.getObjectByName("shield").visible = (p.weapon === 3);
+                
+                // 【修復】對手模型光束劍向前揮砍
+                if (p.weapon === 2 && p.isSwinging) {
+                    mesh.getObjectByName("sword").rotation.x = -Math.PI / 3 + Math.sin(p.swingTime * Math.PI) * 1.2;
+                } else {
+                    mesh.getObjectByName("sword").rotation.set(-Math.PI / 3, 0, 0);
+                }
+                
+                if (p.hp <= 0) mesh.rotation.x = Math.PI / 2;
+                else mesh.rotation.x = 0;
+            }
+        }
+
+        function createOpponentMesh(id, team) {
+            let group = new THREE.Group();
+            let color = team === 0 ? 0x0055ff : 0xff0055; 
+            const bodyMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.2 });
+            
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.8, 16), bodyMat);
+            body.name = "body"; body.position.y = 0.9; group.add(body);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), bodyMat);
+            head.name = "head"; head.position.y = 1.9; group.add(head);
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 0.4), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
+            visor.name = "visor"; visor.position.set(0, 1.95, -0.4); group.add(visor);
+
+            const beaconGeo = new THREE.ConeGeometry(0.3, 0.6, 4);
+            beaconGeo.rotateX(Math.PI);
+            const beaconMat = new THREE.MeshBasicMaterial({ color: color });
+            const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+            beacon.position.y = 2.8;
+            group.add(beacon);
+            
+            let rMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.6), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+            rMesh.name = "rifle"; rMesh.position.set(-0.3, 1.1, -0.5); group.add(rMesh);
+            
+            let rpgM = new THREE.Mesh(rpgProjGeo, new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
+            rpgM.name = "rpg"; rpgM.position.set(-0.3, 1.1, -0.6); group.add(rpgM);
+            
+            // 【修復】對手模型光束劍前傾朝前
+            let sGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.2, 8); sGeo.translate(0, 0.6, 0);
+            let sMesh = new THREE.Mesh(sGeo, new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff }));
+            sMesh.name = "sword"; sMesh.position.set(-0.4, 1.1, -0.4); sMesh.rotation.set(-Math.PI / 3, 0, 0); group.add(sMesh);
+
+            let shGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16, 1, false, 0, Math.PI); shGeo.rotateX(Math.PI/2);
+            let shMesh = new THREE.Mesh(shGeo, new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.3, side: THREE.DoubleSide }));
+            shMesh.name = "shield"; shMesh.position.set(0, 1.0, -0.8); group.add(shMesh);
+
+            if (gameGroup) gameGroup.add(group);
+            opponentMeshes[id] = group;
+        }
+
+        function removeOpponentMesh(id) {
+            if (opponentMeshes[id]) {
+                gameGroup.remove(opponentMeshes[id]);
+                delete opponentMeshes[id];
+            }
+        }
+
+        function setupMobileUI() {
+            document.getElementById('mobile-controls').style.display = 'block';
+            const btnPause = document.getElementById('btn-pause');
+            btnPause.style.display = 'block';
+            btnPause.addEventListener('touchstart', (e) => { e.preventDefault(); document.getElementById('menu').style.display = 'flex'; });
+
+            let rightTouchId = null, lastTouchX = 0, lastTouchY = 0;
+            document.addEventListener('touchstart', (e) => {
+                if (!gameActive) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    if (touch.clientX > window.innerWidth / 2 && rightTouchId === null) {
+                        if (touch.target.classList.contains('action-btn') || touch.target.id === 'btn-pause') continue;
+                        rightTouchId = touch.identifier; lastTouchX = touch.clientX; lastTouchY = touch.clientY;
+                    }
+                }
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!gameActive) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    if (touch.identifier === rightTouchId) {
+                        let yaw = camera.rotation.y - (touch.clientX - lastTouchX) * 0.004;
+                        let pitch = camera.rotation.x - (touch.clientY - lastTouchY) * 0.004;
+                        pitch = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, pitch));
+                        camera.rotation.set(pitch, yaw, 0, 'YXZ');
+                        lastTouchX = touch.clientX; lastTouchY = touch.clientY;
+                    }
+                }
+            });
+
+            document.addEventListener('touchend', (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === rightTouchId) rightTouchId = null;
+                }
+            });
+
+            const joystick = document.getElementById('joystick-container');
+            const knob = document.getElementById('joystick-knob');
+            let leftTouchId = null, joystickCenter = { x: 0, y: 0 }, maxLimit = 45;
+
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.targetTouches[0];
+                leftTouchId = touch.identifier;
+                const rect = joystick.getBoundingClientRect();
+                joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (leftTouchId === null) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    if (touch.identifier === leftTouchId) {
+                        let dx = touch.clientX - joystickCenter.x, dy = touch.clientY - joystickCenter.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > maxLimit) { dx = (dx / dist) * maxLimit; dy = (dy / dist) * maxLimit; }
+                        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+                        move.forward = (dy / maxLimit) < -0.3;
+                        move.backward = (dy / maxLimit) > 0.3;
+                        move.left = (dx / maxLimit) < -0.3;
+                        move.right = (dx / maxLimit) > 0.3;
+                    }
+                }
+            });
+
+            document.addEventListener('touchend', (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === leftTouchId) {
+                        leftTouchId = null; knob.style.transform = `translate(0px, 0px)`;
+                        move.forward = move.backward = move.left = move.right = false;
+                    }
+                }
+            });
+
+            const bindBtn = (id, fn) => document.getElementById(id).addEventListener('touchstart', (e) => { e.preventDefault(); fn(); }, { passive: false });
+            // 新增手機切換武器按鈕綁定
+            bindBtn('btn-weapon', cycleWeapon);
+            bindBtn('btn-shoot', fireWeapon);
+            bindBtn('btn-melee', triggerMelee);
+            bindBtn('btn-slide', triggerSlide);
+            bindBtn('btn-jump', () => { if (canJump && !isSliding) { velocity.y = 120; canJump = false; } });
+        }
+
+        function startSoloGame(map) {
+            isMultiplayer = false;
+            myTeam = 0;
+            document.getElementById('team-name').innerText = "SOLO";
+            document.getElementById('team-name').style.color = "#00ffff";
+            startGame(map);
+        }
+
+        function startGame(mapType) {
+            selectedMap = mapType;
+            document.querySelectorAll('#menu, #rematch-screen, #game-over-screen').forEach(el => el.style.display = 'none');
+            
+            hp = 100; shieldHp = 100; score = 0;
+            document.getElementById('hp-fill').style.width = '100%'; document.getElementById('hp-text').innerText = '100';
+            updateScore();
+            setWeapon(0);
+
+            if (isMultiplayer) {
+                document.getElementById('team-name').innerText = myTeam === 0 ? "TEAM BLUE" : "TEAM RED";
+                document.getElementById('team-name').style.color = myTeam === 0 ? "#00aaff" : "#ff3366";
+                camera.position.set((Math.random()-0.5)*20, 2.5, myTeam === 0 ? 130 : -130);
+                camera.rotation.set(0, myTeam === 0 ? Math.PI : 0, 0, 'YXZ');
+            } else {
+                camera.position.set(0, 2.5, 0);
+                camera.rotation.set(0, 0, 0, 'YXZ');
+            }
+            velocity.set(0,0,0);
+
+            if (gameGroup) {
+                gameGroup.traverse((c) => { if(c.isMesh && c.geometry !== droneProjGeo && c.geometry !== rpgProjGeo) c.geometry.dispose(); });
+                scene.remove(gameGroup);
+            }
+            gameGroup = new THREE.Group(); scene.add(gameGroup);
+            obstacles.length = 0; obstacleBoxes.length = 0; targets.length = 0; hostileDrones.length = 0;
+            enemyProjectiles.length = 0; myRockets.length = 0; explosions.length = 0;
+
+            for(let key in opponentMeshes) removeOpponentMesh(key);
+
+            let skyColor = selectedMap === 'lava' ? 0x170505 : selectedMap === 'maze' ? 0x14100a : 0x0b0e1a;
+            scene.background = new THREE.Color(skyColor); scene.fog = new THREE.FogExp2(skyColor, 0.005);
+            gameGroup.add(new THREE.AmbientLight(0xffffff, 1.2), new THREE.DirectionalLight(0xffffff, 1.5));
+
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x1a2130, roughness: 0.5 }));
+            floor.rotation.x = -Math.PI / 2; gameGroup.add(floor);
+
+            buildTerrain();
+            if (!isMultiplayer) spawnInitialEntities();
+
+            gameActive = true;
+            if (!isMobile) try { controls.lock(); } catch(e){}
+        }
+
+        function buildTerrain() {
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x222e4d, roughness: 0.4 });
+            let blockCount = selectedMap === 'maze' ? 45 : 20;
+            for (let i = 0; i < blockCount; i++) {
+                let isPlatform = Math.random() > 0.5;
+                let w = isPlatform ? (Math.random()*10+5) : (Math.random()*4+2);
+                let h = isPlatform ? (Math.random()*3+1) : (Math.random()*6+4);
+                let d = isPlatform ? (Math.random()*10+5) : (Math.random()*4+2);
+                
+                const block = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+                let x = (Math.random() - 0.5) * 140; let z = (Math.random() - 0.5) * 140;
+                if (Math.abs(x) < 25 && Math.abs(z) < 25) { x += 30; z += 30; } 
+                
+                block.position.set(x, h/2, z);
+                if (Math.random() > 0.5) block.rotation.y = Math.PI / 4;
+                gameGroup.add(block); obstacles.push(block);
+                block.updateMatrixWorld(true); obstacleBoxes.push(new THREE.Box3().setFromObject(block));
+            }
+        }
+
+        function spawnInitialEntities() {
+            for (let i = 0; i < 15; i++) spawnTarget(false);
+            for (let i = 0; i < 5; i++) spawnTarget(true);
+            for (let i = 0; i < (selectedMap === 'lava' ? 6 : 3); i++) spawnDrone();
+        }
+
+        function spawnTarget(isGold) {
+            const mesh = new THREE.Mesh(isGold ? new THREE.SphereGeometry(1.2, 16, 16) : new THREE.BoxGeometry(1.5, 1.5, 1.5), 
+                new THREE.MeshStandardMaterial({ color: isGold ? 0xffd700 : 0xff0055, emissive: isGold ? 0x443300 : 0x330011 }));
+            mesh.position.set((Math.random()-0.5)*120, Math.random()*8+3, (Math.random()-0.5)*120);
+            gameGroup.add(mesh);
+            targets.push({ mesh: mesh, isGold: isGold, speed: isGold ? 6 : 0, dir: new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2), originalY: mesh.position.y });
+        }
+        function spawnDrone() {
+            const group = new THREE.Group();
+            group.add(new THREE.Mesh(new THREE.OctahedronGeometry(1.3, 0), new THREE.MeshStandardMaterial({ color: 0x9900ff, emissive: 0x220044 })));
+            const ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 1.8, 16), new THREE.MeshBasicMaterial({ color: 0x00ffcc, side: THREE.DoubleSide }));
+            ring.rotation.x = Math.PI/2; group.add(ring);
+            group.position.set((Math.random()-0.5)*130, 8.5, (Math.random()-0.5)*130); gameGroup.add(group);
+            hostileDrones.push({ group: group, ring: ring, hp: 30, lastShot: 0, shootCooldown: 2.3 });
+        }
+
+        function setupKeyboardInput() {
+            document.addEventListener('keydown', (e) => {
+                if (!gameActive) return;
+                switch (e.code) {
+                    case 'KeyW': move.forward = true; break;
+                    case 'KeyS': move.backward = true; break;
+                    case 'KeyA': move.left = true; break;
+                    case 'KeyD': move.right = true; break;
+                    case 'Space': 
+                        if (canJump && !isSliding) { velocity.y = 120; canJump = false; } 
+                        break;
+                    case 'ShiftLeft': triggerSlide(); break;
+                    case 'Digit1': setWeapon(0); break;
+                    case 'Digit2': setWeapon(1); break;
+                    case 'Digit3': setWeapon(2); break;
+                    case 'KeyE': setWeapon(2); break; 
+                    case 'Digit4': setWeapon(3); break;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                switch (e.code) {
+                    case 'KeyW': move.forward = false; break;
+                    case 'KeyS': move.backward = false; break;
+                    case 'KeyA': move.left = false; break;
+                    case 'KeyD': move.right = false; break;
+                }
+            });
+            document.addEventListener('mousedown', (e) => {
+                if (isMobile || !gameActive || e.target.id === 'weapon-name') return;
+                if (e.button === 0) fireWeapon();
+            });
+        }
+
+        function setupDesktopFallbackLook() {
+            document.addEventListener('mousedown', (e) => {
+                if (isMobile || !gameActive || controls.isLocked) return;
+                if (e.button === 0 && e.target.id !== 'weapon-name') { desktopDragging = true; dragLastX = e.clientX; dragLastY = e.clientY; }
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!desktopDragging || controls.isLocked) return;
+                let yaw = camera.rotation.y - (e.clientX - dragLastX) * 0.0025; 
+                let pitch = camera.rotation.x - (e.clientY - dragLastY) * 0.0025;
+                pitch = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, pitch));
+                camera.rotation.set(pitch, yaw, 0, 'YXZ');
+                dragLastX = e.clientX; dragLastY = e.clientY;
+            });
+            document.addEventListener('mouseup', () => { desktopDragging = false; });
+        }
+
+        function triggerSlide() {
+            if (isSliding || !canJump || currentWeapon === 3) return; 
+            if (move.forward || move.backward || move.left || move.right) {
+                isSliding = true; slideTimer = 0.5;
+                document.getElementById('weapon-name').innerText = "⚡ SLIDING...";
+                document.getElementById('weapon-name').style.color = "#aaa";
+                
+                let camDir = new THREE.Vector3();
+                camera.getWorldDirection(camDir);
+                let fwd = new THREE.Vector3(camDir.x, 0, camDir.z).normalize();
+                let right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
+                
+                let inputZ = Number(move.forward) - Number(move.backward);
+                let inputX = Number(move.right) - Number(move.left);
+                
+                let slideDir = new THREE.Vector3().addScaledVector(fwd, inputZ).addScaledVector(right, inputX).normalize();
+
+                // 【調整】滑鏟速度減半 (380.0 -> 190.0)
+                velocity.x = slideDir.x * 190.0;
+                velocity.z = slideDir.z * 190.0;
+                
+                camera.position.y = 1.2; 
+            }
+        }
+
+        function fireWeapon() {
+            if (isSliding || hp <= 0) return;
+            if (currentWeapon === 0) fireLaser();
+            else if (currentWeapon === 1) fireRPG();
+            else if (currentWeapon === 2) triggerMelee();
+        }
+
+        function triggerMelee() {
+            if (isSwinging) return;
+            isSwinging = true; swingTime = 0;
+            setTimeout(() => {
+                const pPos = camera.position;
+                if (!isMultiplayer) {
+                    for (let i = targets.length - 1; i >= 0; i--) {
+                        if (pPos.distanceTo(targets[i].mesh.position) < 8.0) {
+                            const wasGold = targets[i].isGold;
+                            score += wasGold ? 50 : 10; 
+                            gameGroup.remove(targets[i].mesh); 
+                            targets.splice(i, 1); 
+                            spawnTarget(wasGold);
+                        }
+                    }
+                    for (let i = hostileDrones.length - 1; i >= 0; i--) {
+                        if (pPos.distanceTo(hostileDrones[i].group.position) < 8.0) {
+                            hostileDrones[i].hp -= 50;
+                            if (hostileDrones[i].hp <= 0) { score += 100; gameGroup.remove(hostileDrones[i].group); hostileDrones.splice(i, 1); spawnDrone(); }
+                        }
+                    }
+                    updateScore();
+                } else {
+                    for(let id in opponentMeshes) {
+                        if (gameState.players[id] && gameState.players[id].team !== myTeam && pPos.distanceTo(opponentMeshes[id].position) < 8.0) {
+                            if (!isHost) hostConn.send({ type: 'hit', targetId: id, damage: 40 });
+                            else handleDataFromClient(myId, { type: 'hit', targetId: id, damage: 40 });
+                        }
+                    }
+                }
+            }, 120);
+        }
+
+        function fireLaser() {
+            const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const lOrg = camera.position.clone(); lOrg.y -= 0.3;
+            let tPt = new THREE.Vector3();
+            const shootables = [...targets.map(t=>t.mesh), ...hostileDrones.map(d=>d.group.children[0]), ...obstacles];
+            if (isMultiplayer) {
+                for(let id in opponentMeshes) {
+                    if (gameState.players[id] && gameState.players[id].team !== myTeam && gameState.players[id].hp > 0) {
+                        opponentMeshes[id].traverse(c => { if(c.isMesh && c.name!=="sword" && c.name!=="shield") shootables.push(c); });
+                    }
+                }
+            }
+
+            const hits = raycaster.intersectObjects(shootables, true);
+            if (hits.length > 0) {
+                const hitObj = hits[0].object; tPt.copy(hits[0].point);
+                const tIdx = targets.findIndex(t => t.mesh === hitObj);
+                if (tIdx > -1) { 
+                    const wasGold = targets[tIdx].isGold;
+                    score += wasGold ? 50:10; 
+                    updateScore(); 
+                    gameGroup.remove(hitObj); 
+                    targets.splice(tIdx,1); 
+                    spawnTarget(wasGold); 
+                }
+                const dIdx = hostileDrones.findIndex(d => d.group.children[0] === hitObj);
+                if (dIdx > -1) {
+                    hostileDrones[dIdx].hp -= 15; hitObj.material.color.setHex(0xffffff); setTimeout(()=>hitObj.material.color.setHex(0x9900ff), 80);
+                    if (hostileDrones[dIdx].hp <= 0) { score+=100; updateScore(); gameGroup.remove(hostileDrones[dIdx].group); hostileDrones.splice(dIdx,1); spawnDrone(); }
+                }
+                if (isMultiplayer && ["body","head","visor"].includes(hitObj.name)) {
+                    let targetId = Object.keys(opponentMeshes).find(id => opponentMeshes[id] && (opponentMeshes[id].children.includes(hitObj) || opponentMeshes[id].getObjectById(hitObj.id)));
+                    if (targetId) {
+                        if (!isHost) hostConn.send({ type: 'hit', targetId: targetId, damage: 15 });
+                        else handleDataFromClient(myId, { type: 'hit', targetId: targetId, damage: 15 });
+                        score += 20; updateScore();
+                    }
+                }
+            } else { camera.getWorldDirection(tPt); tPt.multiplyScalar(150).add(camera.position); }
+            
+            if (isMultiplayer) {
+                let data = { type: 'shoot', origin: {x:lOrg.x,y:lOrg.y,z:lOrg.z}, target: {x:tPt.x,y:tPt.y,z:tPt.z} };
+                if (!isHost) hostConn.send(data); else handleDataFromClient(myId, data);
+            }
+            renderOpponentLaser(lOrg, tPt, myTeam);
+        }
+
+        function fireRPG() {
+            const now = performance.now();
+            if (now - lastRPGFireTime < 2000) {
+                document.getElementById('weapon-name').innerText = "RELOADING...";
+                setTimeout(updateWeaponUI, 500); return; 
+            }
+            lastRPGFireTime = now;
+            const mesh = new THREE.Mesh(rpgProjGeo, rpgProjMat);
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            mesh.position.copy(camera.position).addScaledVector(dir, 1.5);
+            mesh.quaternion.copy(camera.quaternion); gameGroup.add(mesh);
+            myRockets.push({ mesh: mesh, dir: dir, speed: 60, createdAt: now });
+
+            if (isMultiplayer) {
+                let data = { type: 'rpg_shoot', origin: {x:mesh.position.x, y:mesh.position.y, z:mesh.position.z}, dir: {x:dir.x, y:dir.y, z:dir.z} };
+                if (!isHost) hostConn.send(data); else handleDataFromClient(myId, data);
+            }
+        }
+
+        function renderOpponentLaser(origin, target, team) {
+            let color = team === undefined ? 0x00ffff : (team === 0 ? 0x0088ff : 0xff0055);
+            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(origin.x,origin.y,origin.z), new THREE.Vector3(target.x,target.y,target.z)]), new THREE.LineBasicMaterial({ color: color }));
+            gameGroup.add(line); setTimeout(() => { gameGroup.remove(line); line.geometry.dispose(); line.material.dispose(); }, 60);
+        }
+
+        function spawnOpponentRocket(origin, direction, team) {
+            const mesh = new THREE.Mesh(rpgProjGeo, rpgProjMat); mesh.position.set(origin.x, origin.y, origin.z);
+            const dir = new THREE.Vector3(direction.x, direction.y, direction.z);
+            const dummy = new THREE.Object3D(); dummy.position.copy(mesh.position); dummy.lookAt(mesh.position.clone().add(dir)); mesh.quaternion.copy(dummy.quaternion);
+            gameGroup.add(mesh); myRockets.push({ mesh: mesh, dir: dir, speed: 60, createdAt: performance.now(), isEnemyRPG: true });
+        }
+
+        function createExplosion(pos, isEnemyRPG) {
+            const expMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.8 }));
+            expMesh.position.copy(pos); gameGroup.add(expMesh); explosions.push({ mesh: expMesh, timer: 0 });
+
+            const expRadius = 6.0;
+            if (!isMultiplayer) {
+                for (let i = targets.length - 1; i >= 0; i--) {
+                    if (pos.distanceTo(targets[i].mesh.position) < expRadius) {
+                        const wasGold = targets[i].isGold;
+                        score += wasGold ? 50 : 10; 
+                        gameGroup.remove(targets[i].mesh); 
+                        targets.splice(i, 1); 
+                        spawnTarget(wasGold);
+                    }
+                }
+                for (let i = hostileDrones.length - 1; i >= 0; i--) {
+                    if (pos.distanceTo(hostileDrones[i].group.position) < expRadius) {
+                        hostileDrones[i].hp -= 60;
+                        if (hostileDrones[i].hp <= 0) { score += 100; gameGroup.remove(hostileDrones[i].group); hostileDrones.splice(i, 1); spawnDrone(); }
+                    }
+                }
+                updateScore();
+            } else if (!isEnemyRPG) {
+                for(let id in opponentMeshes) {
+                    if (gameState.players[id] && gameState.players[id].team !== myTeam && pos.distanceTo(opponentMeshes[id].position) < expRadius) {
+                        if (!isHost) hostConn.send({ type: 'hit', targetId: id, damage: 50 });
+                        else handleDataFromClient(myId, { type: 'hit', targetId: id, damage: 50 });
+                    }
+                }
+            }
+            if (pos.distanceTo(camera.position) < expRadius - 1) takeDamage(30, pos, false); 
+        }
+
+        function takeDamage(amount, sourcePos, skipShield = false) {
+            if (!gameActive || hp <= 0) return; 
+            let finalDamage = amount;
+
+            if (!skipShield && currentWeapon === 3 && shieldHp > 0 && sourcePos) {
+                let pForward = new THREE.Vector3(0,0,-1); pForward.applyAxisAngle(new THREE.Vector3(0,1,0), camera.rotation.y);
+                let damageDir = sourcePos.clone().sub(camera.position).normalize();
+                
+                if (pForward.dot(damageDir) > 0.1) {
+                    shieldHp -= amount;
+                    if (shieldHp < 0) {
+                        finalDamage = Math.abs(shieldHp); 
+                        shieldHp = 0;
+                        updateWeaponUI(); 
+                    } else {
+                        finalDamage = 0; 
+                    }
+                    document.getElementById('shield-fill').style.width = shieldHp + '%';
+                    document.getElementById('shield-text').innerText = shieldHp;
+                }
+            }
+
+            if (finalDamage > 0) {
+                hp = Math.max(0, hp - finalDamage);
+                document.getElementById('hp-fill').style.width = hp + '%'; document.getElementById('hp-text').innerText = hp;
+                const flash = document.getElementById('damage-flash');
+                flash.style.backgroundColor = 'rgba(255, 0, 85, 0.4)'; setTimeout(() => flash.style.backgroundColor = 'rgba(255, 0, 85, 0)', 150);
+                if (hp <= 0) gameOver(); 
+            }
+        }
+        function updateScore() { document.getElementById('score').innerText = score; }
+
+        function gameOver() {
+            gameActive = false;
+            if (!isMobile) try { controls.unlock(); } catch(e){}
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('game-over-screen').style.display = 'flex';
+        }
+        function closeGameOver() {
+            gameActive = false; document.getElementById('game-over-screen').style.display = 'none';
+            if (isMultiplayer) cancelNetwork();
+            switchSubMenu('lobby'); document.getElementById('menu').style.display = 'flex';
+        }
+
+        let prevTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            if (renderer) renderer.render(scene, camera);
+
+            if (!gameActive) { prevTime = performance.now(); return; }
+
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1);
+
+            const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+            euler.setFromQuaternion(camera.quaternion);
+            let currentYaw = euler.y;
+
+            let friction = isSliding ? 3.0 : 12.0; 
+            velocity.x *= Math.exp(-friction * delta);
+            velocity.z *= Math.exp(-friction * delta);
+            velocity.y -= 9.8 * 45.0 * delta; 
+
+            let inputX = Number(move.right) - Number(move.left);
+            let inputZ = Number(move.backward) - Number(move.forward);
+            const len = Math.sqrt(inputX*inputX + inputZ*inputZ);
+            if (len > 0) { inputX /= len; inputZ /= len; }
+
+            if (!isSliding) {
+                // 【調整】正常走路速度減半 (180.0 -> 90.0)
+                let speed = 90.0; 
+                velocity.x += inputX * speed * 12.0 * delta;
+                velocity.z += inputZ * speed * 12.0 * delta;
+            } else {
+                slideTimer -= delta;
+                if (slideTimer <= 0) {
+                    isSliding = false; 
+                    camera.position.y += 1.3;
+                    updateWeaponUI();
+                }
+            }
+
+            let moveVec = new THREE.Vector3(velocity.x * delta, 0, velocity.z * delta);
+            moveVec.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentYaw);
+
+            const pHeight = isSliding ? 1.2 : 2.5;
+            
+            // X 軸 AABB 碰撞
+            camera.position.x += moveVec.x;
+            let pBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(camera.position.x, camera.position.y - pHeight/2, camera.position.z), new THREE.Vector3(1.6, pHeight, 1.6));
+            for(let b of obstacleBoxes) {
+                if(pBox.intersectsBox(b)) {
+                    if (moveVec.x > 0) camera.position.x = b.min.x - 0.81;
+                    else if (moveVec.x < 0) camera.position.x = b.max.x + 0.81;
+                    pBox.setFromCenterAndSize(new THREE.Vector3(camera.position.x, camera.position.y - pHeight/2, camera.position.z), new THREE.Vector3(1.6, pHeight, 1.6));
+                }
+            }
+            
+            // Z 軸 AABB 碰撞
+            camera.position.z += moveVec.z;
+            pBox.setFromCenterAndSize(new THREE.Vector3(camera.position.x, camera.position.y - pHeight/2, camera.position.z), new THREE.Vector3(1.6, pHeight, 1.6));
+            for(let b of obstacleBoxes) {
+                if(pBox.intersectsBox(b)) {
+                    if (moveVec.z > 0) camera.position.z = b.min.z - 0.81;
+                    else if (moveVec.z < 0) camera.position.z = b.max.z + 0.81;
+                    pBox.setFromCenterAndSize(new THREE.Vector3(camera.position.x, camera.position.y - pHeight/2, camera.position.z), new THREE.Vector3(1.6, pHeight, 1.6));
+                }
+            }
+
+            // Y 軸重力與踏板碰撞
+            camera.position.y += velocity.y * delta;
+            pBox.setFromCenterAndSize(new THREE.Vector3(camera.position.x, camera.position.y - pHeight/2, camera.position.z), new THREE.Vector3(1.6, pHeight, 1.6));
+            let onGround = false;
+            for(let b of obstacleBoxes) {
+                if(pBox.intersectsBox(b)) {
+                    if (velocity.y < 0) { camera.position.y = b.max.y + pHeight; velocity.y = 0; onGround = true; } 
+                    else if (velocity.y > 0) { camera.position.y = b.min.y; velocity.y = 0; }
+                    pBox.setFromCenterAndSize(new THREE.Vector3(camera.position.x, camera.position.y - pHeight/2, camera.position.z), new THREE.Vector3(1.6, pHeight, 1.6));
+                }
+            }
+            
+            if (camera.position.y <= pHeight) { camera.position.y = pHeight; velocity.y = 0; onGround = true; }
+            if (onGround) canJump = true;
+
+            camera.position.x = Math.max(-145, Math.min(145, camera.position.x));
+            camera.position.z = Math.max(-145, Math.min(145, camera.position.z));
+
+            if (isSwinging) {
+                swingTime += delta * 7.5;
+                // 【修復】第一人稱下斜切揮砍，角度方向朝前向下
+                swordMesh.rotation.x = -Math.PI / 4 + Math.sin(swingTime * Math.PI) * 1.2;
+                swordMesh.rotation.z = -Math.PI / 6 - Math.sin(swingTime * Math.PI) * 1.0;
+                if (swingTime >= 1.0) { 
+                    isSwinging = false; 
+                    swordMesh.rotation.set(-Math.PI / 4, 0, -Math.PI / 6); 
+                    updateWeaponUI(); 
+                }
+            }
+
+            // 【修復】補回目標標靶動態
+            targets.forEach(t => {
+                t.mesh.rotation.x += 0.01; t.mesh.rotation.y += 0.015;
+                if (t.isGold) {
+                    t.mesh.position.addScaledVector(t.dir, t.speed * delta); 
+                    t.mesh.position.y = t.originalY + Math.sin(time * 0.004) * 2;
+                    if (Math.abs(t.mesh.position.x) > 130 && t.mesh.position.x * t.dir.x > 0) t.dir.x *= -1;
+                    if (Math.abs(t.mesh.position.z) > 130 && t.mesh.position.z * t.dir.z > 0) t.dir.z *= -1;
+                }
+            });
+
+            // 【修復】補回敵方 AI 追蹤與射擊攻擊
+            hostileDrones.forEach(d => {
+                d.ring.rotation.z += 0.04;
+                const toPlayer = new THREE.Vector3().subVectors(camera.position, d.group.position);
+                toPlayer.y = 0; const dist = toPlayer.length(); toPlayer.normalize();
+                if (dist > 12) d.group.position.addScaledVector(toPlayer, 6 * delta);
+                if (time - d.lastShot > d.shootCooldown * 1000) {
+                    d.lastShot = time;
+                    const proj = new THREE.Mesh(droneProjGeo, droneProjMat); proj.position.copy(d.group.position); gameGroup.add(proj);
+                    enemyProjectiles.push({ mesh: proj, dir: new THREE.Vector3().subVectors(camera.position, d.group.position).normalize(), speed: 38, createdAt: time });
+                }
+            });
+
+            // 【修復】補回敵方子彈推進與擊中玩家傷害檢測
+            for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+                const proj = enemyProjectiles[i]; proj.mesh.position.addScaledVector(proj.dir, proj.speed * delta);
+                if (proj.mesh.position.distanceTo(camera.position) < 1.8) { 
+                    takeDamage(15, proj.mesh.position); 
+                    gameGroup.remove(proj.mesh); 
+                    enemyProjectiles.splice(i, 1); 
+                    continue; 
+                }
+                const box = new THREE.Box3().setFromObject(proj.mesh);
+                if (obstacleBoxes.some(b => box.intersectsBox(b)) || time - proj.createdAt > 3500) { gameGroup.remove(proj.mesh); enemyProjectiles.splice(i, 1); }
+            }
+
+            // 【修復】補回 RPG 火箭飛擊檢測
+            for (let i = myRockets.length - 1; i >= 0; i--) {
+                const r = myRockets[i]; r.mesh.position.addScaledVector(r.dir, r.speed * delta);
+                let hit = false;
+                if (r.mesh.position.y <= 0) hit = true;
+                const rBox = new THREE.Box3().setFromObject(r.mesh);
+                if (!hit && obstacleBoxes.some(b => rBox.intersectsBox(b))) hit = true;
+                if (!hit && !isMultiplayer) {
+                    if (targets.some(t => r.mesh.position.distanceTo(t.mesh.position) < 2)) hit = true;
+                    if (!hit && hostileDrones.some(d => r.mesh.position.distanceTo(d.group.position) < 2)) hit = true;
+                }
+                if (!hit && isMultiplayer && !r.isEnemyRPG) {
+                    for(let id in opponentMeshes) {
+                        if(gameState.players[id] && gameState.players[id].team !== myTeam && r.mesh.position.distanceTo(opponentMeshes[id].position) < 2) hit = true;
+                    }
+                }
+                if (hit || time - r.createdAt > 3000) { createExplosion(r.mesh.position.clone(), r.isEnemyRPG); gameGroup.remove(r.mesh); myRockets.splice(i, 1); }
+            }
+
+            // 【修復】補回爆炸動畫
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const exp = explosions[i]; exp.timer += delta * 3;
+                exp.mesh.scale.set(1 + exp.timer*5, 1 + exp.timer*5, 1 + exp.timer*5);
+                exp.mesh.material.opacity = 0.8 - exp.timer;
+                if (exp.timer >= 0.8) { gameGroup.remove(exp.mesh); exp.mesh.geometry.dispose(); exp.mesh.material.dispose(); explosions.splice(i, 1); }
+            }
+
+            // 【修復】補回多人連線狀態發送
+            if (isMultiplayer) {
+                if (time - lastNetworkSendTime > 30) {
+                    lastNetworkSendTime = time;
+                    if (!isHost) {
+                        if (hostConn && hostConn.open) {
+                            hostConn.send({ type: 'sync', state: { pos: camera.position.clone(), rot: camera.rotation.y, pitch: camera.rotation.x, weapon: currentWeapon, isSliding: isSliding, isSwinging: isSwinging, swingTime: swingTime } });
+                        }
+                    } else {
+                        hostBroadcastLoop();
+                    }
+                }
+            }
+
+            prevTime = time;
+        }
+
+        window.addEventListener('resize', () => { if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); } });
+    </script>
+</body>
+</html>
